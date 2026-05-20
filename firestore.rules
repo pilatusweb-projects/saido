@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSessionOwner(sessionId) {
+      return isAuthenticated()
+        && get(/databases/$(database)/documents/sessions/$(sessionId)).data.createdBy == request.auth.uid;
+    }
+
+    function isPollOwner(pollId) {
+      return isAuthenticated()
+        && isSessionOwner(
+          get(/databases/$(database)/documents/polls/$(pollId)).data.sessionId
+        );
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow create: if isAuthenticated()
+        && request.resource.data.keys().hasAll(['code', 'createdAt', 'createdBy', 'isActive'])
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update, delete: if isAuthenticated()
+        && resource.data.createdBy == request.auth.uid;
+    }
+
+    match /polls/{pollId} {
+      allow read: if true;
+      allow create: if isAuthenticated()
+        && isSessionOwner(request.resource.data.sessionId);
+      allow update, delete: if isAuthenticated()
+        && isSessionOwner(resource.data.sessionId);
+    }
+
+    match /responses/{responseId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['pollId', 'sessionCode', 'answer', 'participantId', 'createdAt'])
+        && !exists(/databases/$(database)/documents/responses/$(responseId));
+      allow update: if false;
+      allow delete: if isPollOwner(resource.data.pollId);
+    }
+  }
+}

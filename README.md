@@ -1,36 +1,161 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Saido
 
-## Getting Started
+Real-time audience engagement platform — live polls, QR join, and instant charts. Built with Next.js and Firebase.
 
-First, run the development server:
+## Features
+
+- **Host authentication** — Email/password signup and login (Firebase Auth)
+- **Session management** — Create sessions with unique 6-character join codes
+- **QR codes** — Participants scan to join `/join/[code]`
+- **Live polling** — Multiple choice polls; launch/close; one active poll per session
+- **Real-time results** — Firestore `onSnapshot` + Chart.js bar charts
+- **Participant flow** — No login required; optional name; one vote per poll
+- **CSV export** — Download poll results and raw responses
+
+## Tech stack
+
+- Next.js (App Router) + React + Tailwind CSS
+- Firebase Auth + Firestore
+- react-chartjs-2, qrcode.react
+- Deploy frontend to [Vercel](https://vercel.com)
+
+## Getting started
+
+### 1. Firebase project
+
+1. Create a project at [Firebase Console](https://console.firebase.google.com)
+2. Enable **Authentication → Email/Password**
+3. Create a **Firestore** database (production mode)
+4. Register a **Web app** and copy the config values
+
+### 2. Environment variables
+
+Copy the example file and fill in your values:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.local.example .env.local
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_FIREBASE_*` | From Firebase web app settings |
+| `NEXT_PUBLIC_APP_URL` | App URL for QR codes (`http://localhost:3000` locally) |
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Firestore rules and indexes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The Firebase CLI does **not** work on Node.js 24+ or 25 (you may see `SlowBuffer.prototype` errors). Use **Node 22** (project includes `.nvmrc`):
 
-## Learn More
+```bash
+nvm install 22
+nvm use 22
+npm install
+npm run firebase -- login
+npm run firebase -- use --add   # select your Firebase project
+npm run deploy:firestore
+```
 
-To learn more about Next.js, take a look at the following resources:
+Or without a global install:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx firebase-tools@14 login
+npx firebase-tools@14 use --add
+npx firebase-tools@14 deploy --only firestore:rules,firestore:indexes
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Alternative:** Paste [`firestore.rules`](firestore.rules) and [`firestore.indexes.json`](firestore.indexes.json) manually in Firebase Console → Firestore → Rules / Indexes.
 
-## Deploy on Vercel
+### 4. Run locally
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm install
+npm run dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Open [http://localhost:3000](http://localhost:3000).
+
+## Hosting: Vercel + Firebase (no paid plan required)
+
+| Service | Role | Paid plan? |
+|---------|------|------------|
+| **Vercel** | Hosts the Next.js app (UI) | Free tier is enough |
+| **Firebase** | Auth + Firestore only | **Spark (free)** is enough |
+
+You do **not** need Firebase Hosting, Blaze/billing, or a paid Firebase plan for Saido.  
+`firebase deploy` in this repo only uploads **Firestore rules and indexes** — that works on the free Spark plan (as you already did).
+
+Ignore upgrade prompts for Firebase App Hosting or Blaze unless you add paid features later.
+
+## Deploy to Vercel
+
+### Option A — GitHub (recommended)
+
+1. Push this repo to GitHub (do **not** commit `.env.local`).
+2. Go to [vercel.com](https://vercel.com) → **Add New Project** → import the repo.
+3. Framework preset: **Next.js** (auto-detected).
+4. **Environment variables** — copy every key from `.env.local`:
+
+   - `NEXT_PUBLIC_FIREBASE_API_KEY`
+   - `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+   - `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+   - `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+   - `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+   - `NEXT_PUBLIC_FIREBASE_APP_ID`
+   - `NEXT_PUBLIC_APP_URL` → set after first deploy, e.g. `https://your-project.vercel.app`
+
+5. Click **Deploy**.
+6. After deploy, set `NEXT_PUBLIC_APP_URL` to your real Vercel URL and **Redeploy** (so QR codes point to production).
+
+### Option B — Vercel CLI
+
+```bash
+npx vercel login
+npx vercel link
+npx vercel env pull   # optional: pull remote env
+# Add env vars in Vercel dashboard, then:
+npx vercel --prod
+```
+
+### Firebase Auth: allow your Vercel domain
+
+Firebase Console → **Authentication** → **Settings** → **Authorized domains** → add:
+
+- `your-project.vercel.app`
+- Any custom domain you use
+
+Without this, login may fail in production.
+
+## Project structure
+
+```
+app/              # Routes (home, auth, dashboard, session, join)
+components/       # UI, auth, session, poll, charts
+hooks/            # usePollResults
+lib/              # Firebase, Firestore helpers, export, codes
+types/            # TypeScript interfaces
+firestore.rules   # Security rules
+```
+
+## Routes
+
+| Route | Description |
+|-------|-------------|
+| `/` | Home — create session / join by code |
+| `/login`, `/signup` | Host authentication |
+| `/dashboard` | List and create sessions (protected) |
+| `/session/[id]` | Host control — polls, QR, live chart, export |
+| `/join/[code]` | Participant join and vote |
+
+## Test checklist
+
+- [ ] Sign up, login, logout; session persists on refresh
+- [ ] Create session → code and QR render correct join URL
+- [ ] Create multiple polls; launch one → only one active
+- [ ] Participant joins without login; votes once; duplicate blocked
+- [ ] Second browser/device: chart updates within ~1 second
+- [ ] Close poll → participant sees waiting state
+- [ ] Export CSV matches vote counts
+- [ ] Mobile layout readable for join and chart
+
+## License
+
+MIT
