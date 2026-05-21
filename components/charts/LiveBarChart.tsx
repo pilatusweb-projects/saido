@@ -11,6 +11,7 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import type { PollChartData } from "@/hooks/usePollResults";
+import { getBarChartColors } from "@/lib/chart-colors";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -28,16 +29,20 @@ export function LiveBarChart({ data, question }: LiveBarChartProps) {
     );
   }
 
+  const colors = getBarChartColors(data.labels.length);
+
   const chartData = {
     labels: data.labels,
     datasets: [
       {
         label: "Votes",
         data: data.values,
-        backgroundColor: "rgba(220, 53, 69, 0.85)",
-        borderColor: "rgba(220, 53, 69, 1)",
-        borderWidth: 1,
+        backgroundColor: colors.backgroundColor,
+        borderColor: colors.borderColor,
+        hoverBackgroundColor: colors.hoverBackgroundColor,
+        borderWidth: 2,
         borderRadius: 8,
+        borderSkipped: false,
       },
     ],
   };
@@ -49,24 +54,48 @@ export function LiveBarChart({ data, question }: LiveBarChartProps) {
     plugins: {
       legend: { display: false },
       title: question
-        ? { display: true, text: question, font: { size: 14 } }
+        ? {
+            display: true,
+            text: question,
+            font: { size: 14, weight: "bold" as const },
+            color: "#334155",
+            padding: { bottom: 12 },
+          }
         : { display: false },
+      tooltip: {
+        backgroundColor: "#0f172a",
+        titleFont: { size: 13, weight: "bold" as const },
+        bodyFont: { size: 12 },
+        padding: 12,
+        cornerRadius: 8,
+        callbacks: {
+          label: (ctx: { label?: string; parsed?: { y: number | null } }) => {
+            const votes = ctx.parsed?.y ?? 0;
+            return `${ctx.label}: ${votes} vote${votes !== 1 ? "s" : ""}`;
+          },
+        },
+      },
     },
     scales: {
       y: {
         beginAtZero: true,
-        ticks: { stepSize: 1, precision: 0 },
-        grid: { color: "rgba(0,0,0,0.05)" },
+        ticks: { stepSize: 1, precision: 0, color: "#64748b" },
+        grid: { color: "rgba(148, 163, 184, 0.25)" },
+        border: { display: false },
       },
       x: {
+        ticks: { color: "#475569", font: { size: 12 } },
         grid: { display: false },
+        border: { display: false },
       },
     },
   };
 
   return (
     <div>
-      <p className="text-xs text-slate-500 mb-2">{data.totalVotes} vote{data.totalVotes !== 1 ? "s" : ""}</p>
+      <p className="text-xs text-slate-500 mb-2">
+        {data.totalVotes} vote{data.totalVotes !== 1 ? "s" : ""}
+      </p>
       <div className="h-56 sm:h-64">
         <Bar data={chartData} options={options} />
       </div>
