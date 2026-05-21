@@ -126,9 +126,8 @@ export function AuthForm({ mode }: AuthFormProps) {
       </form>
 
       <p className="mt-3 text-xs text-slate-500">
-        On restricted company networks, sign-up uses your Vercel server first, then completes
-        sign-in. If it still fails, IT must allow{" "}
-        <span className="font-mono">identitytoolkit.googleapis.com</span>.
+        Company network? Ensure Firebase → Authentication → Authorized domains includes{" "}
+        <span className="font-mono font-semibold">saido-26.vercel.app</span> (required).
       </p>
 
       <p className="mt-4 text-center text-sm text-slate-500">

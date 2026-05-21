@@ -22,12 +22,14 @@ If step 3 still fails with CORS, the network also blocks `signInWithCustomToken`
 
 ## Checklist (Firebase / Google Cloud)
 
-### 1. Authorized domains
+### 1. Authorized domains (you are likely missing this)
 
-Firebase Console → **Authentication** → **Settings** → **Authorized domains**:
+Firebase Console → **Authentication** → **Settings** → **Authorized domains** → **Add domain**:
 
-- `saido-26.vercel.app`
+- **`saido-26.vercel.app`** ← required for Vercel; default `firebaseapp.com` / `web.app` are not enough
 - `localhost`
+
+Your screenshot shows only `localhost`, `saido-26.firebaseapp.com`, and `saido-26.web.app`. **Add `saido-26.vercel.app` now.**
 
 ### 2. API key HTTP referrers
 
