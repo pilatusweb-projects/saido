@@ -15,7 +15,12 @@ export function SessionCard({ session }: SessionCardProps) {
       <Card className="hover:shadow-xl hover:border-primary-soft transition-all cursor-pointer">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-2xl font-bold tracking-widest saido-brand font-mono">
+            {session.name ? (
+              <p className="font-semibold text-slate-900">{session.name}</p>
+            ) : null}
+            <p
+              className={`font-bold tracking-widest saido-brand font-mono ${session.name ? "text-lg mt-0.5" : "text-2xl"}`}
+            >
               {session.code}
             </p>
             <p className="text-sm text-slate-500 mt-1">Session control →</p>

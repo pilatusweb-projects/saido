@@ -1,7 +1,12 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { getSessionByCode, subscribeToActivePoll, submitResponse, hasVoted } from "@/lib/firestore";
+import {
+  subscribeToSessionByCode,
+  subscribeToActivePoll,
+  submitResponse,
+  hasVoted,
+} from "@/lib/firestore";
 import { getParticipantId } from "@/lib/participant";
 import { LiveBarChart } from "@/components/charts/LiveBarChart";
 import { usePollResults } from "@/hooks/usePollResults";
@@ -17,14 +22,13 @@ export default function JoinPage({
   params: Promise<{ code: string }>;
 }) {
   const { code } = use(params);
-  const sessionCode = code.toUpperCase();
+  const sessionCode = code.toUpperCase().trim();
 
   const [session, setSession] = useState<Session | null>(null);
+  const [sessionResolved, setSessionResolved] = useState(false);
   const [activePoll, setActivePoll] = useState<Poll | null>(null);
   const [name, setName] = useState("");
   const [nameSet, setNameSet] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [notFound, setNotFound] = useState(false);
   const [voted, setVoted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -32,19 +36,16 @@ export default function JoinPage({
   const chartData = usePollResults(activePoll);
 
   useEffect(() => {
-    getSessionByCode(sessionCode).then((s) => {
-      if (!s) {
-        setNotFound(true);
-        setLoading(false);
-        return;
-      }
+    setSessionResolved(false);
+    const unsub = subscribeToSessionByCode(sessionCode, (s) => {
       setSession(s);
-      setLoading(false);
+      setSessionResolved(true);
     });
+    return unsub;
   }, [sessionCode]);
 
   useEffect(() => {
-    if (!session) return;
+    if (!session?.isActive) return;
     const unsub = subscribeToActivePoll(sessionCode, setActivePoll);
     return unsub;
   }, [session, sessionCode]);
@@ -81,7 +82,7 @@ export default function JoinPage({
     }
   }
 
-  if (loading) {
+  if (!sessionResolved) {
     return (
       <div className="flex justify-center py-24">
         <Spinner />
@@ -89,11 +90,27 @@ export default function JoinPage({
     );
   }
 
-  if (notFound) {
+  if (!session) {
     return (
       <div className="max-w-md mx-auto px-4 py-16 text-center">
-        <p className="text-slate-600">Session not found or inactive.</p>
-        <p className="text-sm text-slate-400 mt-2 font-mono">{sessionCode}</p>
+        <p className="text-slate-600 font-medium">Session not found</p>
+        <p className="text-sm text-slate-500 mt-2">
+          Code <span className="font-mono font-bold">{sessionCode}</span> does not exist.
+        </p>
+        <p className="text-xs text-slate-400 mt-4">
+          Scan the QR code again from the host screen, or check the 6-character code.
+        </p>
+      </div>
+    );
+  }
+
+  if (!session.isActive) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center">
+        <p className="text-slate-600 font-medium">Session has ended</p>
+        <p className="text-sm text-slate-500 mt-2">
+          {session.name ? session.name : sessionCode} is no longer accepting participants.
+        </p>
       </div>
     );
   }
@@ -103,6 +120,9 @@ export default function JoinPage({
       <div className="max-w-md mx-auto px-4 py-12">
         <Card>
           <CardTitle>Join session</CardTitle>
+          {session.name && (
+            <p className="text-slate-700 font-medium mt-2">{session.name}</p>
+          )}
           <p className="text-sm text-slate-500 mt-2 mb-4">
             Code: <span className="font-mono font-bold saido-brand">{sessionCode}</span>
           </p>
@@ -126,8 +146,11 @@ export default function JoinPage({
   return (
     <div className="max-w-lg mx-auto px-4 py-8 space-y-6">
       <div className="text-center">
-        <p className="text-sm text-slate-500">Session {sessionCode}</p>
-        {name && <p className="text-slate-700 font-medium">Hi, {name}</p>}
+        {session.name && (
+          <p className="font-medium text-slate-800">{session.name}</p>
+        )}
+        <p className="text-sm text-slate-500">Code {sessionCode}</p>
+        {name && <p className="text-slate-700 font-medium mt-1">Hi, {name}</p>}
       </div>
 
       {activePoll ? (

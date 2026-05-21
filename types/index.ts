@@ -3,6 +3,7 @@ import { Timestamp } from "firebase/firestore";
 export interface Session {
   id: string;
   code: string;
+  name: string;
   createdAt: Timestamp;
   createdBy: string;
   isActive: boolean;

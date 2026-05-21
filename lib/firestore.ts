@@ -41,9 +41,10 @@ function mapSession(id: string, data: Record<string, unknown>): Session {
   return {
     id,
     code: data.code as string,
+    name: typeof data.name === "string" ? data.name : "",
     createdAt: data.createdAt as Session["createdAt"],
     createdBy: data.createdBy as string,
-    isActive: data.isActive as boolean,
+    isActive: data.isActive !== false,
   };
 }
 
@@ -73,15 +74,26 @@ function mapResponse(id: string, data: Record<string, unknown>): Response {
 
 export async function createSession(
   code: string,
-  createdBy: string
+  createdBy: string,
+  name = ""
 ): Promise<string> {
   const ref = await addDoc(sessionsCol(), {
     code: code.toUpperCase(),
+    name: name.trim(),
     createdAt: serverTimestamp(),
     createdBy,
     isActive: true,
   });
   return ref.id;
+}
+
+export async function updateSessionName(
+  sessionId: string,
+  name: string
+): Promise<void> {
+  await updateDoc(doc(getDb(), "sessions", sessionId), {
+    name: name.trim(),
+  });
 }
 
 export async function getSessionById(id: string): Promise<Session | null> {
@@ -94,13 +106,36 @@ export async function getSessionByCode(code: string): Promise<Session | null> {
   const q = query(
     sessionsCol(),
     where("code", "==", code.toUpperCase()),
-    where("isActive", "==", true),
     limit(1)
   );
   const snap = await getDocs(q);
   if (snap.empty) return null;
   const d = snap.docs[0];
   return mapSession(d.id, d.data());
+}
+
+export function subscribeToSessionByCode(
+  code: string,
+  callback: (session: Session | null) => void,
+  onError?: (error: FirestoreError) => void
+): Unsubscribe {
+  const q = query(
+    sessionsCol(),
+    where("code", "==", code.toUpperCase()),
+    limit(1)
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      if (snap.empty) {
+        callback(null);
+        return;
+      }
+      const d = snap.docs[0];
+      callback(mapSession(d.id, d.data()));
+    },
+    onError
+  );
 }
 
 export function subscribeToHostSessions(

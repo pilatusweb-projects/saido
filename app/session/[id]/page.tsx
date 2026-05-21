@@ -4,6 +4,8 @@ import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { SessionQR } from "@/components/session/SessionQR";
+import { SessionNameEditor } from "@/components/session/SessionNameEditor";
+import { getJoinUrl } from "@/lib/join-url";
 import { PollResultsPanel } from "@/components/session/PollResultsPanel";
 import { PollForm } from "@/components/poll/PollForm";
 import { PollList } from "@/components/poll/PollList";
@@ -111,21 +113,20 @@ function SessionControlContent({ id }: { id: string }) {
     }
   }
 
-  if (loading) {
+  if (loading || !session) {
+    if (!loading && !session) {
+      return (
+        <div className="max-w-3xl mx-auto px-4 py-16 text-center">
+          <p className="text-slate-500">Session not found.</p>
+          <Link href="/dashboard" className="saido-brand mt-4 inline-block">
+            ← Back to dashboard
+          </Link>
+        </div>
+      );
+    }
     return (
       <div className="flex justify-center py-24">
         <Spinner />
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
-        <p className="text-slate-500">Session not found.</p>
-        <Link href="/dashboard" className="saido-brand mt-4 inline-block">
-          ← Back to dashboard
-        </Link>
       </div>
     );
   }
@@ -138,6 +139,9 @@ function SessionControlContent({ id }: { id: string }) {
             ← Dashboard
           </Link>
           <h1 className="text-2xl font-bold saido-heading mt-1">Session control</h1>
+          {session && (
+            <SessionNameEditor sessionId={session.id} initialName={session.name} />
+          )}
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="secondary" onClick={handleExport} disabled={exporting}>
@@ -177,9 +181,9 @@ function SessionControlContent({ id }: { id: string }) {
           <p className="text-4xl font-bold font-mono tracking-widest saido-brand mt-4">
             {session.code}
           </p>
-          <p className="text-sm text-slate-500 mt-2 mb-6">
+          <p className="text-sm text-slate-500 mt-2 mb-2 break-all">
             {session.isActive
-              ? `Participants can join at /join/${session.code}`
+              ? getJoinUrl(session.code)
               : "Join link is disabled for this session."}
           </p>
           {session.isActive && <SessionQR code={session.code} />}
