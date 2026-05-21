@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SessionHostGuard } from "@/components/auth/SessionHostGuard";
 import { SessionQR } from "@/components/session/SessionQR";
@@ -18,6 +18,7 @@ import {
   endSession,
   deleteSession,
 } from "@/lib/firestore";
+import { authFetch } from "@/lib/api-client-auth";
 import { Badge } from "@/components/ui/Badge";
 import { buildSessionCsv, downloadCsv } from "@/lib/export";
 import type { Session, Poll } from "@/types";
@@ -32,21 +33,81 @@ function SessionControlContent({ id }: { id: string }) {
   const [ending, setEnding] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedPollId, setSelectedPollId] = useState<string | null>(null);
+  const [usingServerSync, setUsingServerSync] = useState(false);
   const lastActivePollId = useRef<string | null>(null);
+  const serverSyncRef = useRef(false);
 
   const activePoll = polls.find((p) => p.isActive) ?? null;
 
+  const loadFromServer = useCallback(async () => {
+    const res = await authFetch(`/api/session/${id}/host`);
+    const data = (await res.json()) as {
+      session?: Session;
+      polls?: Poll[];
+      error?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.error ?? "Could not load session from server.");
+    }
+    if (data.session) {
+      setSession(data.session);
+      setPolls(data.polls ?? []);
+      setLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
+    let cancelled = false;
+    let firestoreDelivered = false;
+    serverSyncRef.current = false;
+    setUsingServerSync(false);
+
+    function enableServerSync() {
+      if (cancelled || firestoreDelivered) return;
+      serverSyncRef.current = true;
+      setUsingServerSync(true);
+    }
+
+    async function bootstrapFromServer() {
+      try {
+        await loadFromServer();
+        enableServerSync();
+      } catch {
+        if (!cancelled && !firestoreDelivered) {
+          setLoading(false);
+        }
+      }
+    }
+
+    bootstrapFromServer();
+
     const unsubSession = subscribeToSession(id, (s) => {
+      if (cancelled || !s) return;
+      firestoreDelivered = true;
+      serverSyncRef.current = false;
+      setUsingServerSync(false);
       setSession(s);
       setLoading(false);
     });
-    const unsubPolls = subscribeToSessionPolls(id, setPolls);
+    const unsubPolls = subscribeToSessionPolls(id, (p) => {
+      if (cancelled || serverSyncRef.current) return;
+      setPolls(p);
+    });
+
     return () => {
+      cancelled = true;
       unsubSession();
       unsubPolls();
     };
-  }, [id]);
+  }, [id, loadFromServer]);
+
+  useEffect(() => {
+    if (!usingServerSync) return;
+    const interval = setInterval(() => {
+      loadFromServer().catch(() => {});
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [usingServerSync, loadFromServer]);
 
   useEffect(() => {
     if (activePoll) {
@@ -139,6 +200,11 @@ function SessionControlContent({ id }: { id: string }) {
             ← Dashboard
           </Link>
           <h1 className="text-2xl font-bold saido-heading mt-1">Session control</h1>
+          {usingServerSync && (
+            <p className="text-xs text-amber-700 mt-1 bg-amber-50 rounded px-2 py-0.5 inline-block">
+              Syncing via server (Firestore unavailable on this network)
+            </p>
+          )}
           {session && (
             <SessionNameEditor sessionId={session.id} initialName={session.name} />
           )}

@@ -6,49 +6,15 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { createSession, isCodeUnique } from "@/lib/firestore";
-import { getAuthInstance } from "@/lib/firebase";
+import { authFetch } from "@/lib/api-client-auth";
 import { generateJoinCode } from "@/lib/codes";
-import { getFirestoreErrorMessage } from "@/lib/firestore-errors";
+import {
+  getFirestoreErrorMessage,
+  isFirestoreUnavailable,
+} from "@/lib/firestore-errors";
 
 interface CreateSessionPanelProps {
   userId: string;
-}
-
-async function createSessionViaApi(
-  name: string
-): Promise<{ id: string; code: string } | null> {
-  const user = getAuthInstance().currentUser;
-  if (!user) return null;
-
-  const token = await user.getIdToken();
-  const res = await fetch("/api/sessions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ name }),
-  });
-
-  if (res.status === 503) {
-    return null;
-  }
-
-  const data = (await res.json()) as {
-    id?: string;
-    code?: string;
-    error?: string;
-  };
-
-  if (!res.ok) {
-    throw new Error(data.error ?? "Could not create session on the server.");
-  }
-
-  if (!data.id || !data.code) {
-    throw new Error("Server did not return a session id.");
-  }
-
-  return { id: data.id, code: data.code };
 }
 
 async function createSessionViaClient(
@@ -64,6 +30,32 @@ async function createSessionViaClient(
   return createSession(code, userId, name);
 }
 
+async function createSessionViaApi(
+  name: string
+): Promise<{ id: string; code: string }> {
+  const res = await authFetch("/api/sessions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+
+  const data = (await res.json()) as {
+    id?: string;
+    code?: string;
+    error?: string;
+  };
+
+  if (!res.ok) {
+    throw new Error(data.error ?? "Could not create session on the server.");
+  }
+
+  if (!data.id) {
+    throw new Error("Server did not return a session id.");
+  }
+
+  return { id: data.id, code: data.code ?? "" };
+}
+
 export function CreateSessionPanel({ userId }: CreateSessionPanelProps) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -75,16 +67,22 @@ export function CreateSessionPanel({ userId }: CreateSessionPanelProps) {
     setError("");
 
     try {
-      const viaApi = await createSessionViaApi(name);
-      if (viaApi) {
-        router.push(`/session/${viaApi.id}`);
+      const id = await createSessionViaClient(userId, name);
+      router.push(`/session/${id}`);
+    } catch (clientErr) {
+      if (!isFirestoreUnavailable(clientErr)) {
+        setError(getFirestoreErrorMessage(clientErr));
         return;
       }
 
-      const id = await createSessionViaClient(userId, name);
-      router.push(`/session/${id}`);
-    } catch (e) {
-      setError(getFirestoreErrorMessage(e));
+      try {
+        const viaApi = await createSessionViaApi(name);
+        router.push(`/session/${viaApi.id}`);
+      } catch (apiErr) {
+        setError(
+          `${getFirestoreErrorMessage(clientErr)} Server fallback: ${getFirestoreErrorMessage(apiErr)}`
+        );
+      }
     } finally {
       setCreating(false);
     }

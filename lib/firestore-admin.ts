@@ -1,6 +1,7 @@
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
-import { getAdminAuth, isAdminConfigured } from "./firebase-admin";
+import { FieldValue, getFirestore, type Timestamp } from "firebase-admin/firestore";
+import { getAdminApp, getAdminAuth, isAdminConfigured } from "./firebase-admin";
 import { generateJoinCode } from "./codes";
+import type { Poll, Session } from "@/types";
 
 export { isAdminConfigured };
 
@@ -12,8 +13,36 @@ export interface PublicSessionInfo {
 }
 
 function getAdminDb() {
-  getAdminAuth(); // ensures app is initialised; throws if not configured
-  return getFirestore();
+  const app = getAdminApp();
+  if (!app) {
+    throw new Error("Firebase Admin SDK is not configured.");
+  }
+  return getFirestore(app);
+}
+
+function mapAdminSession(id: string, data: Record<string, unknown>): Session {
+  const createdAt = data.createdAt as Timestamp | undefined;
+  return {
+    id,
+    code: data.code as string,
+    name: typeof data.name === "string" ? data.name : "",
+    createdAt: createdAt as Session["createdAt"],
+    createdBy: data.createdBy as string,
+    isActive: data.isActive !== false,
+  };
+}
+
+function mapAdminPoll(id: string, data: Record<string, unknown>): Poll {
+  const createdAt = data.createdAt as Timestamp | undefined;
+  return {
+    id,
+    sessionId: data.sessionId as string,
+    sessionCode: data.sessionCode as string,
+    question: data.question as string,
+    options: data.options as string[],
+    isActive: Boolean(data.isActive),
+    createdAt: createdAt as Poll["createdAt"],
+  };
 }
 
 export async function getSessionByCodeAdmin(
@@ -81,4 +110,36 @@ export async function createSessionAdmin(
   });
 
   return { id: ref.id, code: code.toUpperCase() };
+}
+
+export async function listHostSessionsAdmin(ownerUid: string): Promise<Session[]> {
+  const snap = await getAdminDb()
+    .collection("sessions")
+    .where("createdBy", "==", ownerUid)
+    .orderBy("createdAt", "desc")
+    .get();
+
+  return snap.docs.map((d) => mapAdminSession(d.id, d.data()));
+}
+
+export async function getSessionHostAdmin(
+  sessionId: string,
+  ownerUid: string
+): Promise<{ session: Session; polls: Poll[] } | null> {
+  const sessionSnap = await getAdminDb().collection("sessions").doc(sessionId).get();
+  if (!sessionSnap.exists) return null;
+
+  const sessionData = sessionSnap.data()!;
+  if (sessionData.createdBy !== ownerUid) return null;
+
+  const pollsSnap = await getAdminDb()
+    .collection("polls")
+    .where("sessionId", "==", sessionId)
+    .orderBy("createdAt", "desc")
+    .get();
+
+  return {
+    session: mapAdminSession(sessionSnap.id, sessionData),
+    polls: pollsSnap.docs.map((d) => mapAdminPoll(d.id, d.data())),
+  };
 }

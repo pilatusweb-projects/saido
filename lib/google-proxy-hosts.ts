@@ -1,8 +1,8 @@
 /** Google hosts used by Firebase Web SDK — proxied on restricted networks */
+/** Auth-only — do not proxy Firestore (long-poll Listen breaks on serverless). */
 export const PROXYABLE_GOOGLE_HOSTS = [
   "identitytoolkit.googleapis.com",
   "securetoken.googleapis.com",
-  "firestore.googleapis.com",
   "www.googleapis.com",
   "firebaseinstallations.googleapis.com",
 ] as const;

@@ -1,5 +1,17 @@
 import { FirebaseError } from "firebase/app";
 
+export function isFirestoreUnavailable(error: unknown): boolean {
+  if (error instanceof FirebaseError) {
+    return error.code === "unavailable" || error.code === "failed-precondition";
+  }
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    msg.includes("unavailable") ||
+    msg.includes("Could not reach Cloud Firestore") ||
+    msg.includes("offline mode")
+  );
+}
+
 export function isIndexBuildingError(error: unknown): boolean {
   return (
     error instanceof FirebaseError &&
