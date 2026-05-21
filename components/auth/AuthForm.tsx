@@ -6,6 +6,7 @@ import {
   createUserWithEmailAndPassword,
 } from "firebase/auth";
 import { getAuthInstance } from "@/lib/firebase";
+import { isAuthNetworkError, signInWithServerAuth } from "@/lib/auth-client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -20,7 +21,22 @@ const ERROR_MESSAGES: Record<string, string> = {
   "auth/email-already-in-use": "An account already exists with this email.",
   "auth/weak-password": "Password must be at least 6 characters.",
   "auth/invalid-credential": "Invalid email or password.",
+  "auth/unauthorized-domain":
+    "This site URL is not allowed in Firebase. Add your Vercel domain under Authentication → Settings → Authorized domains.",
+  "auth/network-request-failed":
+    "Cannot reach Firebase Auth from this browser. Trying server sign-in…",
+  "server-auth-not-configured":
+    "Server sign-in is not set up. Add FIREBASE_SERVICE_ACCOUNT_KEY on Vercel (see README).",
 };
+
+function getAuthErrorMessage(err: unknown): string {
+  const firebaseErr = err as { code?: string; message?: string };
+  if (firebaseErr.code && ERROR_MESSAGES[firebaseErr.code]) {
+    return ERROR_MESSAGES[firebaseErr.code];
+  }
+  if (firebaseErr.message) return firebaseErr.message;
+  return "Something went wrong. Please try again.";
+}
 
 interface AuthFormProps {
   mode: "login" | "signup";
@@ -37,16 +53,30 @@ export function AuthForm({ mode }: AuthFormProps) {
     e.preventDefault();
     setError("");
     setLoading(true);
+
+    const trimmedEmail = email.trim();
+
     try {
+      const auth = getAuthInstance();
       if (mode === "login") {
-        await signInWithEmailAndPassword(getAuthInstance(), email, password);
+        await signInWithEmailAndPassword(auth, trimmedEmail, password);
       } else {
-        await createUserWithEmailAndPassword(getAuthInstance(), email, password);
+        await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       }
       router.push("/dashboard");
-    } catch (err: unknown) {
-      const code = (err as { code?: string }).code ?? "";
-      setError(ERROR_MESSAGES[code] ?? "Something went wrong. Please try again.");
+    } catch (clientErr) {
+      if (!isAuthNetworkError(clientErr)) {
+        setError(getAuthErrorMessage(clientErr));
+        setLoading(false);
+        return;
+      }
+
+      try {
+        await signInWithServerAuth(mode, trimmedEmail, password);
+        router.push("/dashboard");
+      } catch (serverErr) {
+        setError(getAuthErrorMessage(serverErr));
+      }
     } finally {
       setLoading(false);
     }
@@ -94,6 +124,12 @@ export function AuthForm({ mode }: AuthFormProps) {
           {loading ? "Please wait…" : mode === "login" ? "Sign in" : "Sign up"}
         </Button>
       </form>
+
+      <p className="mt-3 text-xs text-slate-500">
+        On restricted company networks, sign-up uses your Vercel server first, then completes
+        sign-in. If it still fails, IT must allow{" "}
+        <span className="font-mono">identitytoolkit.googleapis.com</span>.
+      </p>
 
       <p className="mt-4 text-center text-sm text-slate-500">
         {mode === "login" ? (

@@ -115,14 +115,59 @@ npx vercel env pull   # optional: pull remote env
 npx vercel --prod
 ```
 
-### Firebase Auth: allow your Vercel domain
+### Firebase Auth: allow your Vercel domain (required)
 
-Firebase Console → **Authentication** → **Settings** → **Authorized domains** → add:
+Firebase Console → [Authentication](https://console.firebase.google.com) → **Settings** → **Authorized domains** → **Add domain**:
 
-- `your-project.vercel.app`
-- Any custom domain you use
+- `saido-26.vercel.app` (your production URL, without `https://`)
+- `localhost` (usually already there for local dev)
+- Any custom domain you add later
 
-Without this, login may fail in production.
+Without this, signup/login fails with `auth/unauthorized-domain` (not always shown as CORS in the console).
+
+### Google Cloud API key restrictions (if signup shows CORS / failed fetch)
+
+If the API key has **HTTP referrer** restrictions, open [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → your **Browser key** → **Application restrictions** → **HTTP referrers** and add:
+
+```
+https://saido-26.vercel.app/*
+https://*.vercel.app/*
+http://localhost:3000/*
+```
+
+Or set **None** for application restrictions while testing (less secure; tighten referrers for production).
+
+Ensure these APIs are **enabled** for project `saido-26`:
+
+- Identity Toolkit API
+- Token Service API
+
+### Server-side auth for company networks (recommended on Vercel)
+
+If signup works at home but shows **CORS** on the company network, add a Firebase **service account** so auth can run on Vercel (same origin) instead of only in the browser:
+
+1. Firebase Console → **Project settings** → **Service accounts** → **Generate new private key**
+2. Vercel → **Environment variables** → `FIREBASE_SERVICE_ACCOUNT_KEY` = paste the full JSON
+3. Redeploy
+
+The app will automatically fall back to `/api/auth/signup` and `/api/auth/login` when the browser cannot reach Google.
+
+Check: `https://saido-26.vercel.app/api/auth/network-check` → `serverCanReachFirebaseAuth: true`
+
+Full IT allowlist and troubleshooting: [docs/CORPORATE_NETWORK.md](docs/CORPORATE_NETWORK.md)
+
+### Signup blocked on company network (CORS / `identitytoolkit.googleapis.com`)
+
+A **CORS error** on `identitytoolkit.googleapis.com` means the browser did not get a normal Google response (firewall/proxy/referrer block).
+
+| Cause | What to do |
+|-------|------------|
+| Missing service account on Vercel | Add `FIREBASE_SERVICE_ACCOUNT_KEY` (above) |
+| Domain not authorized | Add `saido-26.vercel.app` to Firebase **Authorized domains** |
+| API key referrer block | Allow `https://saido-26.vercel.app/*` on the API key |
+| Corporate firewall | IT must allow `identitytoolkit.googleapis.com` and related hosts ([list](docs/CORPORATE_NETWORK.md)) |
+
+**Quick test:** signup on phone hotspot. If it works there, ask IT to unblock Google Auth APIs.
 
 ## Project structure
 
