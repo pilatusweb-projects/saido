@@ -209,6 +209,7 @@ firestore.rules   # Security rules
 | `/login`, `/signup` | Host authentication |
 | `/dashboard` | List and create sessions (protected) |
 | `/session/[id]` | Host control — polls, QR, live chart, export (cookie + middleware) |
+| `/session/[id]/present` | Presenter mode — fullscreen projection, live chart, join QR/code, launch/close (cookie + middleware) |
 | `/go/[id]` | QR redirect → `/join/{code}` |
 | `/join/[code]` | Participant join and vote |
 
@@ -222,6 +223,8 @@ firestore.rules   # Security rules
 - [ ] Participant joins without login; votes once; duplicate blocked
 - [ ] Second browser/device: chart updates within ~1 second
 - [ ] Close poll → participant sees waiting state
+- [ ] Presenter mode opens in new tab; lobby shows code + QR; launch/close from presenter updates chart live
+- [ ] Presenter fullscreen (F) and Exit return to control panel
 - [ ] Export CSV matches vote counts
 - [ ] Mobile layout readable for join and chart
 

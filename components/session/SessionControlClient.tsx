@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { SessionQR } from "@/components/session/SessionQR";
 import { SessionNameEditor } from "@/components/session/SessionNameEditor";
@@ -10,19 +10,13 @@ import { PollForm } from "@/components/poll/PollForm";
 import { PollList } from "@/components/poll/PollList";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { subscribeToSession, subscribeToSessionPolls } from "@/lib/firestore";
 import { hostFetch } from "@/lib/host-api";
-import {
-  hostPollToPoll,
-  hostSessionToSession,
-  type HostPollProps,
-  type HostSessionProps,
-} from "@/lib/serialize-host-data";
+import { useHostSession } from "@/hooks/useHostSession";
+import type { HostPollProps, HostSessionProps } from "@/lib/serialize-host-data";
 import { Badge } from "@/components/ui/Badge";
 import { downloadCsv } from "@/lib/export";
 import { toast } from "@/lib/toast";
 import { useConfirm } from "@/components/providers/ConfirmProvider";
-import type { Session, Poll } from "@/types";
 import Link from "next/link";
 
 interface SessionControlClientProps {
@@ -38,87 +32,16 @@ export function SessionControlClient({
 }: SessionControlClientProps) {
   const router = useRouter();
   const confirm = useConfirm();
-  const [session, setSession] = useState<Session>(hostSessionToSession(initialSession));
-  const [polls, setPolls] = useState<Poll[]>(initialPolls.map(hostPollToPoll));
+  const { session, polls, activePoll, usingServerSync, refresh } = useHostSession({
+    sessionId,
+    initialSession,
+    initialPolls,
+  });
   const [exporting, setExporting] = useState(false);
   const [ending, setEnding] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedPollId, setSelectedPollId] = useState<string | null>(null);
-  const [usingServerSync, setUsingServerSync] = useState(false);
   const lastActivePollId = useRef<string | null>(null);
-  const serverSyncRef = useRef(false);
-
-  const activePoll = polls.find((p) => p.isActive) ?? null;
-
-  const loadFromServer = useCallback(async () => {
-    const res = await hostFetch(`/api/session/${sessionId}/host`);
-    const data = (await res.json()) as {
-      session?: HostSessionProps;
-      polls?: HostPollProps[];
-      error?: string;
-    };
-    if (!res.ok) throw new Error(data.error ?? "Could not load session.");
-    if (data.session) {
-      setSession(hostSessionToSession(data.session));
-      setPolls((data.polls ?? []).map(hostPollToPoll));
-    }
-  }, [sessionId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    serverSyncRef.current = false;
-    setUsingServerSync(false);
-
-    const unsubSession = subscribeToSession(sessionId, (s) => {
-      if (cancelled || !s) return;
-      serverSyncRef.current = false;
-      setUsingServerSync(false);
-      setSession(s);
-    });
-    const unsubPolls = subscribeToSessionPolls(sessionId, (p) => {
-      if (cancelled || serverSyncRef.current) return;
-      setPolls(p);
-    });
-
-    const onFirestoreError = async () => {
-      if (cancelled || serverSyncRef.current) return;
-      serverSyncRef.current = true;
-      setUsingServerSync(true);
-      try {
-        await loadFromServer();
-      } catch {
-        /* keep last known state */
-      }
-    };
-
-    return () => {
-      cancelled = true;
-      unsubSession();
-      unsubPolls();
-    };
-  }, [sessionId, loadFromServer]);
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      if (!serverSyncRef.current) {
-        loadFromServer()
-          .then(() => {
-            serverSyncRef.current = true;
-            setUsingServerSync(true);
-          })
-          .catch(() => {});
-      }
-    }, 4000);
-    return () => clearTimeout(t);
-  }, [loadFromServer]);
-
-  useEffect(() => {
-    if (!usingServerSync) return;
-    const interval = setInterval(() => {
-      loadFromServer().catch(() => {});
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [usingServerSync, loadFromServer]);
 
   useEffect(() => {
     if (activePoll) {
@@ -172,7 +95,7 @@ export function SessionControlClient({
         const data = (await res.json()) as { error?: string };
         throw new Error(data.error ?? "Could not end session.");
       }
-      await loadFromServer();
+      await refresh();
       toast.success("Session ended.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to end session.");
@@ -222,6 +145,14 @@ export function SessionControlClient({
           <SessionNameEditor sessionId={session.id} initialName={session.name} />
         </div>
         <div className="flex gap-2 flex-wrap">
+          <a
+            href={`/session/${sessionId}/present`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-xl font-medium transition-all px-3 py-1.5 text-sm bg-primary text-white hover:bg-primary-hover shadow-sm focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+          >
+            Presenter mode
+          </a>
           <Button variant="secondary" onClick={handleExport} disabled={exporting}>
             {exporting ? "Exporting…" : "Export CSV"}
           </Button>
