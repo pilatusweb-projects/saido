@@ -1,9 +1,10 @@
 import { getAdminAuth, isAdminConfigured } from "./firebase-admin";
+import {
+  SESSION_COOKIE_NAME,
+  SESSION_COOKIE_MAX_AGE_MS,
+} from "./auth-session-constants";
 
-export const SESSION_COOKIE_NAME = "__saido_session";
-
-/** 14 days in milliseconds */
-export const SESSION_COOKIE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+export { SESSION_COOKIE_NAME, SESSION_COOKIE_MAX_AGE_MS };
 
 export function sessionCookieOptions() {
   const isProd = process.env.NODE_ENV === "production";
