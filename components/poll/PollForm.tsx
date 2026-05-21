@@ -3,7 +3,7 @@
 import { useState, FormEvent } from "react";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { createPoll } from "@/lib/firestore";
+import { hostJson } from "@/lib/host-api";
 import { hasDuplicateOptions, normalizePollOptions, duplicateOptionsMessage } from "@/lib/poll-options";
 
 interface PollFormProps {
@@ -49,7 +49,10 @@ export function PollForm({ sessionId, sessionCode, onCreated }: PollFormProps) {
     setError("");
     setLoading(true);
     try {
-      await createPoll(sessionId, sessionCode, question.trim(), trimmed);
+      await hostJson(`/api/session/${sessionId}/polls`, {
+        method: "POST",
+        body: JSON.stringify({ question: question.trim(), options: trimmed }),
+      });
       setQuestion("");
       setOptions(["", ""]);
       onCreated?.();

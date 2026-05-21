@@ -4,7 +4,9 @@ import type { Poll } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { PollEditForm } from "@/components/poll/PollEditForm";
-import { launchPoll, closePoll, deletePoll } from "@/lib/firestore";
+import { hostFetch } from "@/lib/host-api";
+import { toast } from "@/lib/toast";
+import { useConfirm } from "@/components/providers/ConfirmProvider";
 import { useState } from "react";
 
 interface PollListProps {
@@ -23,11 +25,21 @@ export function PollList({
 }: PollListProps) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   async function handleLaunch(pollId: string) {
     setLoadingId(pollId);
     try {
-      await launchPoll(sessionId, pollId);
+      const res = await hostFetch(`/api/session/${sessionId}/polls/${pollId}/launch`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? "Launch failed.");
+      }
+      toast.success("Poll is live.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Launch failed.");
     } finally {
       setLoadingId(null);
     }
@@ -36,26 +48,42 @@ export function PollList({
   async function handleClose(pollId: string) {
     setLoadingId(pollId);
     try {
-      await closePoll(pollId);
+      const res = await hostFetch(`/api/session/${sessionId}/polls/${pollId}/close`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? "Close failed.");
+      }
+      toast.success("Poll closed.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Close failed.");
     } finally {
       setLoadingId(null);
     }
   }
 
   async function handleDelete(poll: Poll) {
-    if (
-      !confirm(
-        `Delete "${poll.question}"? All votes for this poll will be permanently removed.`
-      )
-    ) {
-      return;
-    }
+    const ok = await confirm({
+      title: `Delete "${poll.question}"?`,
+      description: "All votes for this poll will be permanently removed.",
+      confirmLabel: "Delete poll",
+      variant: "danger",
+    });
+    if (!ok) return;
     setLoadingId(poll.id);
     try {
-      await deletePoll(poll.id);
+      const res = await hostFetch(`/api/session/${sessionId}/polls/${poll.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? "Delete failed.");
+      }
       setEditingId(null);
+      toast.success("Poll deleted.");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete poll.");
+      toast.error(err instanceof Error ? err.message : "Failed to delete poll.");
     } finally {
       setLoadingId(null);
     }
@@ -137,6 +165,7 @@ export function PollList({
           </div>
           {editingId === poll.id && !poll.isActive && (
             <PollEditForm
+              sessionId={sessionId}
               poll={poll}
               onSaved={() => setEditingId(null)}
               onCancel={() => setEditingId(null)}

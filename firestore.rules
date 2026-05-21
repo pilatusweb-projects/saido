@@ -17,11 +17,18 @@ service cloud.firestore {
         );
     }
 
+    function validPollOptions(options) {
+      return options is list
+        && options.size() >= 2
+        && options.size() <= 10;
+    }
+
     match /sessions/{sessionId} {
       allow read: if true;
       allow create: if isAuthenticated()
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.code is string
+        && request.resource.data.code.size() == 6
         && request.resource.data.name is string
         && request.resource.data.isActive == true;
       allow update, delete: if isAuthenticated()
@@ -31,7 +38,12 @@ service cloud.firestore {
     match /polls/{pollId} {
       allow read: if true;
       allow create: if isAuthenticated()
-        && isSessionOwner(request.resource.data.sessionId);
+        && isSessionOwner(request.resource.data.sessionId)
+        && request.resource.data.question is string
+        && request.resource.data.question.size() > 0
+        && request.resource.data.question.size() <= 500
+        && validPollOptions(request.resource.data.options)
+        && request.resource.data.isActive == false;
       allow update, delete: if isAuthenticated()
         && isSessionOwner(resource.data.sessionId);
     }
@@ -39,6 +51,14 @@ service cloud.firestore {
     match /responses/{responseId} {
       allow read: if true;
       allow create: if request.resource.data.keys().hasAll(['pollId', 'sessionCode', 'answer', 'participantId', 'createdAt'])
+        && request.resource.data.participantId is string
+        && request.resource.data.participantId.size() >= 8
+        && request.resource.data.participantId.size() <= 128
+        && request.resource.data.sessionCode is string
+        && request.resource.data.sessionCode.size() == 6
+        && request.resource.data.answer is string
+        && request.resource.data.answer.size() > 0
+        && request.resource.data.answer.size() <= 500
         && !exists(/databases/$(database)/documents/responses/$(responseId));
       allow update: if false;
       allow delete: if isPollOwner(resource.data.pollId);

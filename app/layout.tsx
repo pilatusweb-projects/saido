@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/AuthProvider";
+import { ConfirmProvider } from "@/components/providers/ConfirmProvider";
 import { FetchProxyProvider } from "@/components/providers/FetchProxyProvider";
 import { Navbar } from "@/components/layout/Navbar";
+import { AppToaster } from "@/components/ui/AppToaster";
 
 const geist = Geist({
   variable: "--font-geist-sans",
@@ -28,8 +30,11 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-slate-50 text-slate-900 font-sans">
         <FetchProxyProvider>
           <AuthProvider>
-            <Navbar />
-            <main className="flex-1">{children}</main>
+            <ConfirmProvider>
+              <Navbar />
+              <main className="flex-1">{children}</main>
+              <AppToaster />
+            </ConfirmProvider>
           </AuthProvider>
         </FetchProxyProvider>
       </body>

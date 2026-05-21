@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { verifyHostRequest } from "@/lib/api-auth";
-import { getSessionHostAdmin } from "@/lib/firestore-admin";
+import {
+  buildSessionCsvAdmin,
+  getSessionHostAdmin,
+} from "@/lib/firestore-admin";
 
 export async function GET(
   request: Request,
@@ -14,13 +17,19 @@ export async function GET(
   const { id } = await context.params;
 
   try {
-    const data = await getSessionHostAdmin(id, auth.uid);
-    if (!data) {
+    const host = await getSessionHostAdmin(id, auth.uid);
+    if (!host) {
       return NextResponse.json({ error: "Session not found." }, { status: 404 });
     }
-    return NextResponse.json(data);
+    const csv = await buildSessionCsvAdmin(id);
+    return new NextResponse(csv, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="saido-session-${host.session.code}.csv"`,
+      },
+    });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Could not load session.";
+    const message = e instanceof Error ? e.message : "Export failed.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

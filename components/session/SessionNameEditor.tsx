@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
-import { updateSessionName } from "@/lib/firestore";
+import { hostFetch } from "@/lib/host-api";
 
 interface SessionNameEditorProps {
   sessionId: string;
@@ -22,7 +22,14 @@ export function SessionNameEditor({ sessionId, initialName }: SessionNameEditorP
   async function handleSave() {
     setSaving(true);
     try {
-      await updateSessionName(sessionId, name);
+      const res = await hostFetch(`/api/session/${sessionId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? "Rename failed.");
+      }
       setEditing(false);
     } finally {
       setSaving(false);

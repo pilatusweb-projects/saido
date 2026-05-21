@@ -40,6 +40,9 @@ cp .env.local.example .env.local
 |----------|-------------|
 | `NEXT_PUBLIC_FIREBASE_*` | From Firebase web app settings |
 | `NEXT_PUBLIC_APP_URL` | App URL for QR codes (`http://localhost:3000` locally) |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | Service account JSON — **required** for host session cookies, APIs, and corp-network auth |
+| `NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY` | reCAPTCHA v3 site key for App Check (production) |
+| `NEXT_PUBLIC_APP_CHECK_DEBUG_TOKEN` | Optional — local dev App Check debug token |
 
 ### 3. Firestore rules and indexes
 
@@ -169,6 +172,24 @@ A **CORS error** on `identitytoolkit.googleapis.com` means the browser did not g
 
 **Quick test:** signup on phone hotspot. If it works there, ask IT to unblock Google Auth APIs.
 
+## Architecture (2026)
+
+| Layer | Role |
+|-------|------|
+| **Middleware** | Protects `/dashboard` and `/session/*` — requires `__saido_session` cookie |
+| **Session cookie** | After Firebase sign-in, `POST /api/auth/session` sets httpOnly cookie (14 days) |
+| **Host mutations** | All create/update/delete via Admin SDK route handlers (`/api/sessions`, `/api/session/...`) |
+| **Host reads** | Server Components load initial data; client `onSnapshot` for live updates when Firestore is reachable |
+| **Participants** | Client Firestore on `/join/[code]` for realtime polls and votes (no login) |
+| **App Check** | Optional reCAPTCHA v3 — enable in Firebase Console (monitoring mode first) |
+
+### Firebase App Check setup
+
+1. Firebase Console → **App Check** → register web app with **reCAPTCHA v3**
+2. Add `NEXT_PUBLIC_FIREBASE_APP_CHECK_SITE_KEY` to Vercel
+3. Enable enforcement for **Authentication** and **Firestore** in **monitoring** mode first
+4. For local dev: create a debug token in App Check → add `NEXT_PUBLIC_APP_CHECK_DEBUG_TOKEN`
+
 ## Project structure
 
 ```
@@ -187,13 +208,16 @@ firestore.rules   # Security rules
 | `/` | Home — create session / join by code |
 | `/login`, `/signup` | Host authentication |
 | `/dashboard` | List and create sessions (protected) |
-| `/session/[id]` | Host control — polls, QR, live chart, export |
+| `/session/[id]` | Host control — polls, QR, live chart, export (cookie + middleware) |
+| `/go/[id]` | QR redirect → `/join/{code}` |
 | `/join/[code]` | Participant join and vote |
 
 ## Test checklist
 
-- [ ] Sign up, login, logout; session persists on refresh
-- [ ] Create session → code and QR render correct join URL
+- [ ] Sign up, login → `__saido_session` cookie set (DevTools → Application → Cookies)
+- [ ] `/dashboard` without cookie redirects to `/login`
+- [ ] Logout clears cookie; protected routes redirect to login
+- [ ] Create session → code and QR render correct join URL (`/go/{id}` in QR)
 - [ ] Create multiple polls; launch one → only one active
 - [ ] Participant joins without login; votes once; duplicate blocked
 - [ ] Second browser/device: chart updates within ~1 second

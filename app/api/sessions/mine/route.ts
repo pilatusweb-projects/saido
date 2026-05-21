@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { verifyBearerToken } from "@/lib/api-auth";
+import { verifyHostRequest } from "@/lib/api-auth";
 import { listHostSessionsAdmin } from "@/lib/firestore-admin";
 
 export async function GET(request: Request) {
-  const auth = await verifyBearerToken(request);
+  const auth = await verifyHostRequest(request);
   if ("error" in auth) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }

@@ -4,16 +4,17 @@ import { useEffect, useState, FormEvent } from "react";
 import type { Poll } from "@/types";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { updatePoll, getPollResponseCount } from "@/lib/firestore";
+import { hostFetch, hostJson } from "@/lib/host-api";
 import { hasDuplicateOptions, normalizePollOptions, duplicateOptionsMessage } from "@/lib/poll-options";
 
 interface PollEditFormProps {
+  sessionId: string;
   poll: Poll;
   onSaved: () => void;
   onCancel: () => void;
 }
 
-export function PollEditForm({ poll, onSaved, onCancel }: PollEditFormProps) {
+export function PollEditForm({ sessionId, poll, onSaved, onCancel }: PollEditFormProps) {
   const [question, setQuestion] = useState(poll.question);
   const [options, setOptions] = useState([...poll.options]);
   const [hasVotes, setHasVotes] = useState(false);
@@ -21,8 +22,10 @@ export function PollEditForm({ poll, onSaved, onCancel }: PollEditFormProps) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getPollResponseCount(poll.id).then((n) => setHasVotes(n > 0));
-  }, [poll.id]);
+    hostJson<{ count: number }>(`/api/session/${sessionId}/polls/${poll.id}`)
+      .then((data) => setHasVotes(data.count > 0))
+      .catch(() => setHasVotes(false));
+  }, [sessionId, poll.id]);
 
   function updateOption(index: number, value: string) {
     setOptions((prev) => prev.map((o, i) => (i === index ? value : o)));
@@ -51,7 +54,10 @@ export function PollEditForm({ poll, onSaved, onCancel }: PollEditFormProps) {
     setError("");
     setLoading(true);
     try {
-      await updatePoll(poll.id, question, trimmed);
+      await hostJson(`/api/session/${sessionId}/polls/${poll.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ question, options: trimmed }),
+      });
       onSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update poll.");

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isProxyableGoogleHost } from "@/lib/google-proxy-hosts";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const FORWARD_REQUEST_HEADERS = [
   "content-type",
@@ -47,6 +48,11 @@ export async function DELETE(request: NextRequest) {
 }
 
 async function proxyRequest(request: NextRequest) {
+  const rate = checkRateLimit(request, "google-proxy");
+  if (!rate.ok) {
+    return NextResponse.json({ error: rate.message }, { status: 429 });
+  }
+
   const host = request.nextUrl.searchParams.get("host");
   const path = request.nextUrl.searchParams.get("path");
 

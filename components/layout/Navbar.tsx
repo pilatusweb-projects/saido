@@ -5,6 +5,7 @@ import { Logo } from "@/components/layout/Logo";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { signOut } from "firebase/auth";
 import { getAuthInstance } from "@/lib/firebase";
+import { clearServerSession } from "@/lib/auth-session-client";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 
@@ -13,6 +14,7 @@ export function Navbar() {
   const router = useRouter();
 
   async function handleLogout() {
+    await clearServerSession();
     await signOut(getAuthInstance());
     router.push("/");
   }

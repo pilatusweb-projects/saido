@@ -14,6 +14,7 @@
     "node": ">=20 <23"
   },
   "dependencies": {
+    "@radix-ui/react-alert-dialog": "^1.1.15",
     "chart.js": "^4.5.1",
     "clsx": "^2.1.1",
     "firebase": "^12.13.0",
@@ -23,6 +24,7 @@
     "react": "19.2.4",
     "react-chartjs-2": "^5.3.1",
     "react-dom": "19.2.4",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {

@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { getSessionByCodeAdmin, isAdminConfigured } from "@/lib/firestore-admin";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ code: string }> }
 ) {
+  const rate = checkRateLimit(request, "join-lookup");
+  if (!rate.ok) {
+    return NextResponse.json({ error: rate.message }, { status: 429 });
+  }
+
   const { code: raw } = await context.params;
   const code = raw.toUpperCase().trim();
 

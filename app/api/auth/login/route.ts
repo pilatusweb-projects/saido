@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { isAdminConfigured } from "@/lib/firebase-admin";
 import { createCustomTokenForEmailPassword } from "@/lib/auth-server";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
+  const rate = checkRateLimit(request, "auth-login");
+  if (!rate.ok) {
+    return NextResponse.json({ error: rate.message }, { status: 429 });
+  }
+
   if (!isAdminConfigured()) {
     return NextResponse.json(
       {

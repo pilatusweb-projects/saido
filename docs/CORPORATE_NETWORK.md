@@ -66,13 +66,13 @@ Allow **HTTPS outbound** from user browsers to:
 |------|---------|
 | `identitytoolkit.googleapis.com` | Firebase Auth (signup, login, tokens) |
 | `securetoken.googleapis.com` | Auth tokens |
-| `firestore.googleapis.com` | Database |
+| `firestore.googleapis.com` | Database (participants + live host charts; host writes use Vercel APIs) |
 | `www.googleapis.com` | Google APIs |
 | `saido-26.vercel.app` | Saido app (your deployment) |
 
 Optional: allow `*.googleapis.com` and `*.vercel.app` if policy allows.
 
-**Do not** rely only on allowing `saido-26.vercel.app` — Auth still contacts Google APIs from the browser for Firestore and session tokens.
+**Do not** rely only on allowing `saido-26.vercel.app` — Auth still contacts Google APIs from the browser for sign-in tokens. **Host** create/launch/poll actions go through `saido-26.vercel.app/api/*` (no client Firestore write required). Participants still need `firestore.googleapis.com` for live join/vote.
 
 ## Quick tests
 

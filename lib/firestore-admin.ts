@@ -1,7 +1,17 @@
-import { FieldValue, getFirestore, type Timestamp } from "firebase-admin/firestore";
-import { getAdminApp, getAdminAuth, isAdminConfigured } from "./firebase-admin";
+import {
+  FieldValue,
+  getFirestore,
+  type Timestamp,
+  type DocumentReference,
+} from "firebase-admin/firestore";
+import { getAdminApp, isAdminConfigured } from "./firebase-admin";
 import { generateJoinCode } from "./codes";
-import type { Poll, Session } from "@/types";
+import {
+  duplicateOptionsMessage,
+  hasDuplicateOptions,
+  normalizePollOptions,
+} from "./poll-options";
+import type { Poll, Response, Session } from "@/types";
 
 export { isAdminConfigured };
 
@@ -142,4 +152,268 @@ export async function getSessionHostAdmin(
     session: mapAdminSession(sessionSnap.id, sessionData),
     polls: pollsSnap.docs.map((d) => mapAdminPoll(d.id, d.data())),
   };
+}
+
+async function assertSessionOwner(
+  sessionId: string,
+  ownerUid: string
+): Promise<Session> {
+  const snap = await getAdminDb().collection("sessions").doc(sessionId).get();
+  if (!snap.exists) throw new Error("Session not found.");
+  const session = mapAdminSession(snap.id, snap.data()!);
+  if (session.createdBy !== ownerUid) throw new Error("Forbidden.");
+  return session;
+}
+
+export async function updateSessionNameAdmin(
+  sessionId: string,
+  ownerUid: string,
+  name: string
+): Promise<void> {
+  await assertSessionOwner(sessionId, ownerUid);
+  await getAdminDb()
+    .collection("sessions")
+    .doc(sessionId)
+    .update({ name: name.trim() });
+}
+
+export async function createPollAdmin(
+  sessionId: string,
+  ownerUid: string,
+  question: string,
+  options: string[]
+): Promise<string> {
+  const session = await assertSessionOwner(sessionId, ownerUid);
+  const normalized = normalizePollOptions(options);
+  if (normalized.length < 2) throw new Error("Add at least 2 options.");
+  if (hasDuplicateOptions(normalized)) throw new Error(duplicateOptionsMessage());
+
+  const ref = await getAdminDb().collection("polls").add({
+    sessionId,
+    sessionCode: session.code.toUpperCase(),
+    question: question.trim(),
+    options: normalized,
+    isActive: false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function launchPollAdmin(
+  sessionId: string,
+  ownerUid: string,
+  pollId: string
+): Promise<void> {
+  await assertSessionOwner(sessionId, ownerUid);
+  const pollsSnap = await getAdminDb()
+    .collection("polls")
+    .where("sessionId", "==", sessionId)
+    .get();
+  const batch = getAdminDb().batch();
+  pollsSnap.docs.forEach((d) => {
+    batch.update(d.ref, { isActive: d.id === pollId });
+  });
+  await batch.commit();
+}
+
+export async function closePollAdmin(
+  sessionId: string,
+  ownerUid: string,
+  pollId: string
+): Promise<void> {
+  await assertSessionOwner(sessionId, ownerUid);
+  await getAdminDb().collection("polls").doc(pollId).update({ isActive: false });
+}
+
+export async function getPollResponseCountAdmin(pollId: string): Promise<number> {
+  const snap = await getAdminDb()
+    .collection("responses")
+    .where("pollId", "==", pollId)
+    .get();
+  return snap.size;
+}
+
+export async function updatePollAdmin(
+  sessionId: string,
+  ownerUid: string,
+  pollId: string,
+  question: string,
+  options: string[]
+): Promise<void> {
+  await assertSessionOwner(sessionId, ownerUid);
+  const pollRef = getAdminDb().collection("polls").doc(pollId);
+  const snap = await pollRef.get();
+  if (!snap.exists) throw new Error("Poll not found.");
+  const data = snap.data()!;
+  if (data.isActive) throw new Error("Close the poll before editing.");
+
+  const trimmedOptions = normalizePollOptions(options);
+  if (trimmedOptions.length < 2) throw new Error("Add at least 2 options.");
+  if (hasDuplicateOptions(trimmedOptions)) throw new Error(duplicateOptionsMessage());
+
+  const responseCount = await getPollResponseCountAdmin(pollId);
+  const payload: { question: string; options?: string[] } = {
+    question: question.trim(),
+  };
+
+  if (responseCount === 0) {
+    payload.options = trimmedOptions;
+  } else {
+    const existing = (data.options as string[]) ?? [];
+    const optionsChanged =
+      trimmedOptions.length !== existing.length ||
+      trimmedOptions.some((o, i) => o !== existing[i]);
+    if (optionsChanged) {
+      throw new Error(
+        "This poll already has votes. You can edit the question only, not the options."
+      );
+    }
+  }
+
+  await pollRef.update(payload);
+}
+
+const BATCH_LIMIT = 500;
+
+async function deleteDocumentsAdmin(refs: DocumentReference[]): Promise<void> {
+  const db = getAdminDb();
+  for (let i = 0; i < refs.length; i += BATCH_LIMIT) {
+    const batch = db.batch();
+    refs.slice(i, i + BATCH_LIMIT).forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
+}
+
+export async function deletePollAdmin(
+  sessionId: string,
+  ownerUid: string,
+  pollId: string
+): Promise<void> {
+  await assertSessionOwner(sessionId, ownerUid);
+  const pollRef = getAdminDb().collection("polls").doc(pollId);
+  const snap = await pollRef.get();
+  if (!snap.exists) return;
+  if (snap.data()!.isActive) throw new Error("Close the poll before deleting.");
+
+  const responsesSnap = await getAdminDb()
+    .collection("responses")
+    .where("pollId", "==", pollId)
+    .get();
+  await deleteDocumentsAdmin(responsesSnap.docs.map((d) => d.ref));
+  await pollRef.delete();
+}
+
+export async function endSessionAdmin(sessionId: string, ownerUid: string): Promise<void> {
+  await assertSessionOwner(sessionId, ownerUid);
+  const pollsSnap = await getAdminDb()
+    .collection("polls")
+    .where("sessionId", "==", sessionId)
+    .get();
+  const batch = getAdminDb().batch();
+  pollsSnap.docs.forEach((d) => {
+    if (d.data().isActive) batch.update(d.ref, { isActive: false });
+  });
+  batch.update(getAdminDb().collection("sessions").doc(sessionId), { isActive: false });
+  await batch.commit();
+}
+
+export async function deleteSessionAdmin(
+  sessionId: string,
+  ownerUid: string
+): Promise<void> {
+  await assertSessionOwner(sessionId, ownerUid);
+  const pollsSnap = await getAdminDb()
+    .collection("polls")
+    .where("sessionId", "==", sessionId)
+    .get();
+
+  const responseRefs: DocumentReference[] = [];
+  for (const pollDoc of pollsSnap.docs) {
+    const responsesSnap = await getAdminDb()
+      .collection("responses")
+      .where("pollId", "==", pollDoc.id)
+      .get();
+    responseRefs.push(...responsesSnap.docs.map((d) => d.ref));
+  }
+
+  await deleteDocumentsAdmin(responseRefs);
+  await deleteDocumentsAdmin(pollsSnap.docs.map((d) => d.ref));
+  await getAdminDb().collection("sessions").doc(sessionId).delete();
+}
+
+function mapAdminResponse(id: string, data: Record<string, unknown>): Response {
+  const createdAt = data.createdAt as Timestamp | undefined;
+  return {
+    id,
+    pollId: data.pollId as string,
+    sessionCode: data.sessionCode as string,
+    answer: data.answer as string,
+    participantId: data.participantId as string,
+    participantName: data.participantName as string | undefined,
+    createdAt: createdAt as Response["createdAt"],
+  };
+}
+
+export async function getPollsForSessionAdmin(sessionId: string): Promise<Poll[]> {
+  const snap = await getAdminDb()
+    .collection("polls")
+    .where("sessionId", "==", sessionId)
+    .orderBy("createdAt", "desc")
+    .get();
+  return snap.docs.map((d) => mapAdminPoll(d.id, d.data()));
+}
+
+export async function getResponsesForPollAdmin(pollId: string): Promise<Response[]> {
+  const snap = await getAdminDb()
+    .collection("responses")
+    .where("pollId", "==", pollId)
+    .get();
+  return snap.docs.map((d) => mapAdminResponse(d.id, d.data()));
+}
+
+function escapeCsv(value: string): string {
+  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+export async function buildSessionCsvAdmin(sessionId: string): Promise<string> {
+  const polls = await getPollsForSessionAdmin(sessionId);
+  const lines: string[] = [];
+
+  lines.push("Poll Question,Option,Vote Count");
+  for (const poll of polls) {
+    const responses = await getResponsesForPollAdmin(poll.id);
+    const counts: Record<string, number> = {};
+    poll.options.forEach((opt) => {
+      counts[opt] = 0;
+    });
+    responses.forEach((r) => {
+      if (counts[r.answer] !== undefined) counts[r.answer]++;
+    });
+    for (const opt of poll.options) {
+      lines.push(
+        [escapeCsv(poll.question), escapeCsv(opt), String(counts[opt] ?? 0)].join(",")
+      );
+    }
+    lines.push("");
+  }
+
+  lines.push("--- Raw Responses ---");
+  lines.push("Poll Question,Participant Name,Answer");
+  for (const poll of polls) {
+    const responses = await getResponsesForPollAdmin(poll.id);
+    for (const r of responses) {
+      lines.push(
+        [
+          escapeCsv(poll.question),
+          escapeCsv(r.participantName ?? "Anonymous"),
+          escapeCsv(r.answer),
+        ].join(",")
+      );
+    }
+  }
+
+  return lines.join("\n");
 }

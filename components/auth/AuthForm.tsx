@@ -7,11 +7,12 @@ import {
 } from "firebase/auth";
 import { getAuthInstance } from "@/lib/firebase";
 import { isAuthNetworkError, signInWithServerAuth } from "@/lib/auth-client";
+import { establishServerSession } from "@/lib/auth-session-client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const ERROR_MESSAGES: Record<string, string> = {
   "auth/invalid-email": "Invalid email address.",
@@ -48,6 +49,16 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get("next");
+
+  function redirectAfterAuth() {
+    const target =
+      nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//")
+        ? nextPath
+        : "/dashboard";
+    router.push(target);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -63,7 +74,8 @@ export function AuthForm({ mode }: AuthFormProps) {
       } else {
         await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       }
-      router.push("/dashboard");
+      await establishServerSession();
+      redirectAfterAuth();
     } catch (clientErr) {
       if (!isAuthNetworkError(clientErr)) {
         setError(getAuthErrorMessage(clientErr));
@@ -73,7 +85,8 @@ export function AuthForm({ mode }: AuthFormProps) {
 
       try {
         await signInWithServerAuth(mode, trimmedEmail, password);
-        router.push("/dashboard");
+        await establishServerSession();
+        redirectAfterAuth();
       } catch (serverErr) {
         setError(getAuthErrorMessage(serverErr));
       }
