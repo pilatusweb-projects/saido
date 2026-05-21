@@ -17,7 +17,7 @@ export function Card({ className, children, ...props }: HTMLAttributes<HTMLDivEl
 
 export function CardTitle({ className, children, ...props }: HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h2 className={cn("text-lg font-semibold text-slate-900", className)} {...props}>
+    <h2 className={cn("text-lg font-semibold saido-heading", className)} {...props}>
       {children}
     </h2>
   );

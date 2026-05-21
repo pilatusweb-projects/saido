@@ -22,9 +22,9 @@ export default function HomePage() {
   return (
     <div className="flex-1">
       <section className="max-w-4xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
-        <h1 className="text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight">
+        <h1 className="text-4xl sm:text-5xl font-bold saido-heading tracking-tight">
           Engage your audience{" "}
-          <span className="text-indigo-600">in real time</span>
+          <span className="saido-brand">in real time</span>
         </h1>
         <p className="mt-4 text-lg text-slate-600 max-w-xl mx-auto">
           Create live polls, share a join code or QR, and watch results update instantly.
@@ -41,7 +41,7 @@ export default function HomePage() {
 
       <section className="max-w-md mx-auto px-4 pb-24">
         <Card>
-          <h2 className="text-lg font-semibold text-slate-900 mb-4">Join a session</h2>
+          <h2 className="text-lg font-semibold saido-heading mb-4">Join a session</h2>
           <form onSubmit={handleJoin} className="flex gap-2">
             <Input
               value={joinCode}

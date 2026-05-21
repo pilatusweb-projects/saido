@@ -12,6 +12,9 @@ const geist = Geist({
 export const metadata: Metadata = {
   title: "Saido – Live Audience Engagement",
   description: "Real-time polling for meetings and events",
+  icons: {
+    icon: "/saido-logo.png",
+  },
 };
 
 export default function RootLayout({

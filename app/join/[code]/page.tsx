@@ -104,7 +104,7 @@ export default function JoinPage({
         <Card>
           <CardTitle>Join session</CardTitle>
           <p className="text-sm text-slate-500 mt-2 mb-4">
-            Code: <span className="font-mono font-bold text-indigo-600">{sessionCode}</span>
+            Code: <span className="font-mono font-bold saido-brand">{sessionCode}</span>
           </p>
           <label className="block text-sm font-medium text-slate-700 mb-1">
             Your name (optional)

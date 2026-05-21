@@ -54,7 +54,7 @@ export function AuthForm({ mode }: AuthFormProps) {
 
   return (
     <Card className="w-full max-w-md mx-auto">
-      <h1 className="text-2xl font-bold text-slate-900 mb-1">
+      <h1 className="text-2xl font-bold saido-heading mb-1">
         {mode === "login" ? "Welcome back" : "Create account"}
       </h1>
       <p className="text-slate-500 text-sm mb-6">
@@ -99,14 +99,14 @@ export function AuthForm({ mode }: AuthFormProps) {
         {mode === "login" ? (
           <>
             No account?{" "}
-            <Link href="/signup" className="text-indigo-600 hover:underline font-medium">
+            <Link href="/signup" className="saido-brand hover:underline font-medium">
               Sign up
             </Link>
           </>
         ) : (
           <>
             Already have an account?{" "}
-            <Link href="/login" className="text-indigo-600 hover:underline font-medium">
+            <Link href="/login" className="saido-brand hover:underline font-medium">
               Sign in
             </Link>
           </>

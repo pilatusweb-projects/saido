@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { Logo } from "@/components/layout/Logo";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { signOut } from "firebase/auth";
 import { getAuthInstance } from "@/lib/firebase";
@@ -19,15 +20,13 @@ export function Navbar() {
   return (
     <nav className="border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-        <Link href="/" className="text-xl font-bold text-indigo-600 tracking-tight">
-          Saido
-        </Link>
+        <Logo />
         <div className="flex items-center gap-3">
           {!loading && user ? (
             <>
               <Link
                 href="/dashboard"
-                className="text-sm text-slate-600 hover:text-indigo-600 transition-colors"
+                className="text-sm text-slate-600 hover:saido-brand transition-colors"
               >
                 Dashboard
               </Link>

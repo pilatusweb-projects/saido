@@ -123,7 +123,7 @@ function SessionControlContent({ id }: { id: string }) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-16 text-center">
         <p className="text-slate-500">Session not found.</p>
-        <Link href="/dashboard" className="text-indigo-600 mt-4 inline-block">
+        <Link href="/dashboard" className="saido-brand mt-4 inline-block">
           ← Back to dashboard
         </Link>
       </div>
@@ -134,10 +134,10 @@ function SessionControlContent({ id }: { id: string }) {
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <Link href="/dashboard" className="text-sm text-indigo-600 hover:underline">
+          <Link href="/dashboard" className="text-sm saido-brand hover:underline">
             ← Dashboard
           </Link>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">Session control</h1>
+          <h1 className="text-2xl font-bold saido-heading mt-1">Session control</h1>
         </div>
         <div className="flex gap-2 flex-wrap">
           <Button variant="secondary" onClick={handleExport} disabled={exporting}>
@@ -174,7 +174,7 @@ function SessionControlContent({ id }: { id: string }) {
               {session.isActive ? "Open for joins" : "Ended"}
             </Badge>
           </div>
-          <p className="text-4xl font-bold font-mono tracking-widest text-indigo-600 mt-4">
+          <p className="text-4xl font-bold font-mono tracking-widest saido-brand mt-4">
             {session.code}
           </p>
           <p className="text-sm text-slate-500 mt-2 mb-6">

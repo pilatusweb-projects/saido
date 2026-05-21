@@ -34,8 +34,8 @@ export function LiveBarChart({ data, question }: LiveBarChartProps) {
       {
         label: "Votes",
         data: data.values,
-        backgroundColor: "rgba(79, 70, 229, 0.8)",
-        borderColor: "rgba(79, 70, 229, 1)",
+        backgroundColor: "rgba(220, 53, 69, 0.85)",
+        borderColor: "rgba(220, 53, 69, 1)",
         borderWidth: 1,
         borderRadius: 8,
       },
