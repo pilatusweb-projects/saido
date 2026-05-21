@@ -2,10 +2,10 @@
 
 import { use, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AuthGuard } from "@/components/auth/AuthGuard";
+import { SessionHostGuard } from "@/components/auth/SessionHostGuard";
 import { SessionQR } from "@/components/session/SessionQR";
 import { SessionNameEditor } from "@/components/session/SessionNameEditor";
-import { getJoinUrl } from "@/lib/join-url";
+import { JoinLinkPanel } from "@/components/session/JoinLinkPanel";
 import { PollResultsPanel } from "@/components/session/PollResultsPanel";
 import { PollForm } from "@/components/poll/PollForm";
 import { PollList } from "@/components/poll/PollList";
@@ -181,12 +181,15 @@ function SessionControlContent({ id }: { id: string }) {
           <p className="text-4xl font-bold font-mono tracking-widest saido-brand mt-4">
             {session.code}
           </p>
-          <p className="text-sm text-slate-500 mt-2 mb-2 break-all">
-            {session.isActive
-              ? getJoinUrl(session.code)
-              : "Join link is disabled for this session."}
-          </p>
-          {session.isActive && <SessionQR code={session.code} />}
+          {session.isActive && (
+            <>
+              <JoinLinkPanel sessionId={session.id} code={session.code} />
+              <SessionQR sessionId={session.id} code={session.code} />
+            </>
+          )}
+          {!session.isActive && (
+            <p className="text-sm text-slate-500 mt-2">Join link is disabled for this session.</p>
+          )}
         </Card>
 
         <PollResultsPanel
@@ -234,8 +237,8 @@ export default function SessionPage({
   const { id } = use(params);
 
   return (
-    <AuthGuard>
+    <SessionHostGuard sessionId={id}>
       <SessionControlContent id={id} />
-    </AuthGuard>
+    </SessionHostGuard>
   );
 }

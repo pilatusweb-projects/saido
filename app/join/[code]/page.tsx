@@ -14,7 +14,12 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
+import Link from "next/link";
 import type { Session, Poll } from "@/types";
+
+type JoinSession = Pick<Session, "id" | "code" | "name" | "isActive">;
+
+const TIMEOUT_MS = 8_000;
 
 export default function JoinPage({
   params,
@@ -24,46 +29,72 @@ export default function JoinPage({
   const { code } = use(params);
   const sessionCode = code.toUpperCase().trim();
 
-  const [session, setSession] = useState<Session | null>(null);
-  const [sessionResolved, setSessionResolved] = useState(false);
+  const [session, setSession] = useState<JoinSession | null | "loading">("loading");
   const [activePoll, setActivePoll] = useState<Poll | null>(null);
   const [name, setName] = useState("");
   const [nameSet, setNameSet] = useState(false);
   const [voted, setVoted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [voteError, setVoteError] = useState("");
 
-  const chartData = usePollResults(activePoll);
-
+  // Subscribe to the session document by code.
   useEffect(() => {
-    setSessionResolved(false);
-    const unsub = subscribeToSessionByCode(sessionCode, (s) => {
-      setSession(s);
-      setSessionResolved(true);
-    });
-    return unsub;
+    setSession("loading");
+    setActivePoll(null);
+    setVoted(false);
+    setNameSet(false);
+
+    // Timeout: if Firestore hasn't responded after 8s, show an error.
+    const timeout = setTimeout(() => {
+      setSession((current) => (current === "loading" ? null : current));
+    }, TIMEOUT_MS);
+
+    const unsub = subscribeToSessionByCode(
+      sessionCode,
+      (s) => {
+        clearTimeout(timeout);
+        setSession(
+          s
+            ? { id: s.id, code: s.code, name: s.name, isActive: s.isActive }
+            : null
+        );
+      },
+      () => {
+        clearTimeout(timeout);
+        setSession(null);
+      }
+    );
+
+    return () => {
+      clearTimeout(timeout);
+      unsub();
+    };
   }, [sessionCode]);
 
+  // Subscribe to the active poll once we have a live session.
   useEffect(() => {
-    if (!session?.isActive) return;
+    if (!session || session === "loading" || !session.isActive) return;
     const unsub = subscribeToActivePoll(sessionCode, setActivePoll);
     return unsub;
   }, [session, sessionCode]);
 
+  // Check whether this participant already voted on the new poll.
   useEffect(() => {
-    if (!activePoll) return;
+    if (!activePoll) { setVoted(false); return; }
     const participantId = getParticipantId(sessionCode);
     if (!participantId) return;
     hasVoted(activePoll.id, participantId).then(setVoted);
   }, [activePoll, sessionCode]);
 
+  const chartData = usePollResults(activePoll);
+
   async function handleVote(answer: string) {
-    if (!activePoll || voted) return;
+    if (!activePoll || voted || submitting) return;
     const participantId = getParticipantId(sessionCode);
     if (!participantId) return;
 
     setSubmitting(true);
-    setError("");
+    setVoteError("");
     try {
       await submitResponse(
         activePoll.id,
@@ -74,66 +105,86 @@ export default function JoinPage({
       );
       setVoted(true);
     } catch {
-      setError("Could not submit vote. You may have already voted.");
-      const already = await hasVoted(activePoll.id, participantId);
-      setVoted(already);
+      const already = await hasVoted(activePoll.id, participantId).catch(() => false);
+      if (already) {
+        setVoted(true);
+      } else {
+        setVoteError("Could not submit vote — please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
-  if (!sessionResolved) {
+  // --- Loading ---
+  if (session === "loading") {
     return (
-      <div className="flex justify-center py-24">
+      <div className="flex flex-col items-center justify-center py-24 gap-3">
         <Spinner />
+        <p className="text-sm text-slate-500">Looking up session…</p>
       </div>
     );
   }
 
+  // --- Not found ---
   if (!session) {
     return (
-      <div className="max-w-md mx-auto px-4 py-16 text-center">
-        <p className="text-slate-600 font-medium">Session not found</p>
-        <p className="text-sm text-slate-500 mt-2">
-          Code <span className="font-mono font-bold">{sessionCode}</span> does not exist.
+      <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
+        <p className="text-slate-700 font-semibold text-lg">Session not found</p>
+        <p className="text-sm text-slate-500">
+          Code <span className="font-mono font-bold saido-brand">{sessionCode}</span> does
+          not exist.
         </p>
-        <p className="text-xs text-slate-400 mt-4">
+        <p className="text-sm text-slate-400">
           Scan the QR code again from the host screen, or check the 6-character code.
         </p>
+        <Link href="/">
+          <Button variant="secondary" size="sm" className="mt-2">
+            Try a different code
+          </Button>
+        </Link>
       </div>
     );
   }
 
+  // --- Session ended ---
   if (!session.isActive) {
     return (
-      <div className="max-w-md mx-auto px-4 py-16 text-center">
-        <p className="text-slate-600 font-medium">Session has ended</p>
-        <p className="text-sm text-slate-500 mt-2">
-          {session.name ? session.name : sessionCode} is no longer accepting participants.
+      <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
+        <p className="text-slate-700 font-semibold text-lg">Session has ended</p>
+        {session.name && (
+          <p className="text-slate-500 text-sm">{session.name}</p>
+        )}
+        <p className="text-sm text-slate-400">
+          This session is no longer accepting participants.
         </p>
       </div>
     );
   }
 
+  // --- Name entry (before joining) ---
   if (!nameSet) {
     return (
       <div className="max-w-md mx-auto px-4 py-12">
         <Card>
           <CardTitle>Join session</CardTitle>
           {session.name && (
-            <p className="text-slate-700 font-medium mt-2">{session.name}</p>
+            <p className="text-slate-700 font-medium mt-1">{session.name}</p>
           )}
-          <p className="text-sm text-slate-500 mt-2 mb-4">
-            Code: <span className="font-mono font-bold saido-brand">{sessionCode}</span>
+          <p className="text-xs text-slate-500 mt-1 mb-5">
+            Code:{" "}
+            <span className="font-mono font-bold saido-brand">{sessionCode}</span>
           </p>
           <label className="block text-sm font-medium text-slate-700 mb-1">
-            Your name (optional)
+            Your name <span className="text-slate-400 font-normal">(optional)</span>
           </label>
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && setNameSet(true)}
             placeholder="Anonymous"
             className="mb-4"
+            autoFocus
           />
           <Button className="w-full" size="lg" onClick={() => setNameSet(true)}>
             Continue
@@ -143,28 +194,34 @@ export default function JoinPage({
     );
   }
 
+  // --- Live session view ---
   return (
-    <div className="max-w-lg mx-auto px-4 py-8 space-y-6">
+    <div className="max-w-lg mx-auto px-4 py-8 space-y-5">
       <div className="text-center">
         {session.name && (
-          <p className="font-medium text-slate-800">{session.name}</p>
+          <p className="font-semibold text-slate-800">{session.name}</p>
         )}
-        <p className="text-sm text-slate-500">Code {sessionCode}</p>
-        {name && <p className="text-slate-700 font-medium mt-1">Hi, {name}</p>}
+        <p className="text-xs text-slate-400 mt-0.5">
+          Code{" "}
+          <span className="font-mono font-bold saido-brand">{sessionCode}</span>
+          {name && (
+            <span className="text-slate-500"> · {name}</span>
+          )}
+        </p>
       </div>
 
       {activePoll ? (
         <Card>
           <CardTitle>{activePoll.question}</CardTitle>
           {voted ? (
-            <p className="text-sm text-green-600 mt-4 bg-green-50 rounded-lg px-3 py-2">
-              Thanks! Your vote has been recorded.
+            <p className="mt-4 text-sm text-green-700 bg-green-50 rounded-lg px-3 py-2">
+              Vote recorded. Results update live below.
             </p>
           ) : (
             <div className="mt-4 space-y-2">
-              {activePoll.options.map((opt, index) => (
+              {activePoll.options.map((opt, i) => (
                 <Button
-                  key={`${activePoll.id}-option-${index}`}
+                  key={`${activePoll.id}-${i}`}
                   variant="secondary"
                   className="w-full justify-start text-left"
                   size="lg"
@@ -176,26 +233,26 @@ export default function JoinPage({
               ))}
             </div>
           )}
-          {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
+          {voteError && (
+            <p className="mt-2 text-sm text-red-600">{voteError}</p>
+          )}
         </Card>
       ) : (
         <Card>
-          <p className="text-slate-500 text-center py-6">
+          <p className="text-slate-500 text-center py-8">
             Waiting for the host to launch a poll…
           </p>
         </Card>
       )}
 
-      <Card>
-        <CardTitle>Live results</CardTitle>
-        <div className="mt-4">
-          {activePoll ? (
+      {activePoll && (
+        <Card>
+          <CardTitle>Live results</CardTitle>
+          <div className="mt-4">
             <LiveBarChart data={chartData} />
-          ) : (
-            <p className="text-sm text-slate-400 text-center py-6">No active poll</p>
-          )}
-        </div>
-      </Card>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
