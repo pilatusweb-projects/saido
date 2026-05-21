@@ -12,6 +12,7 @@ import {
 import { Bar } from "react-chartjs-2";
 import type { PollChartData } from "@/hooks/usePollResults";
 import { getBarChartColors } from "@/lib/chart-colors";
+import { truncateLabel } from "@/lib/truncate-label";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -39,9 +40,12 @@ export function LiveBarChart({
   }
 
   const colors = getBarChartColors(data.labels.length);
+  const fullLabels = data.labels;
+  const maxLabelLen = isPresenter ? 22 : 28;
+  const displayLabels = fullLabels.map((l) => truncateLabel(l, maxLabelLen));
 
   const chartData = {
-    labels: data.labels,
+    labels: displayLabels,
     datasets: [
       {
         label: "Votes",
@@ -78,9 +82,15 @@ export function LiveBarChart({
         padding: 12,
         cornerRadius: 8,
         callbacks: {
-          label: (ctx: { label?: string; parsed?: { y: number | null } }) => {
+          title: (items: { dataIndex?: number }[]) => {
+            const i = items[0]?.dataIndex;
+            return i !== undefined ? fullLabels[i] ?? "" : "";
+          },
+          label: (ctx: { dataIndex?: number; parsed?: { y: number | null } }) => {
+            const i = ctx.dataIndex ?? 0;
+            const name = fullLabels[i] ?? "";
             const votes = ctx.parsed?.y ?? 0;
-            return `${ctx.label}: ${votes} vote${votes !== 1 ? "s" : ""}`;
+            return `${name}: ${votes} vote${votes !== 1 ? "s" : ""}`;
           },
         },
       },
@@ -102,7 +112,11 @@ export function LiveBarChart({
       x: {
         ticks: {
           color: isPresenter ? "#cbd5e1" : "#475569",
-          font: { size: isPresenter ? 15 : 12, weight: isPresenter ? ("bold" as const) : undefined },
+          font: { size: isPresenter ? 13 : 11, weight: isPresenter ? ("bold" as const) : undefined },
+          maxRotation: 0,
+          minRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: 12,
         },
         grid: { display: false },
         border: { display: false },
@@ -127,11 +141,16 @@ export function LiveBarChart({
       <div
         className={
           isPresenter
-            ? "flex-1 min-h-[280px] sm:min-h-[360px] lg:min-h-[420px]"
-            : "h-56 sm:h-64"
+            ? "flex-1 min-h-[280px] sm:min-h-[360px] lg:min-h-[420px] overflow-hidden"
+            : "h-56 sm:h-64 overflow-hidden"
         }
       >
-        <Bar data={chartData} options={options} />
+        <Bar
+          key={displayLabels.join("|")}
+          data={chartData}
+          options={options}
+          redraw
+        />
       </div>
     </div>
   );

@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { cn } from "@/lib/utils";
 import { LiveBarChart } from "@/components/charts/LiveBarChart";
 import { PresenterJoinPanel } from "@/components/presenter/PresenterJoinPanel";
 import { PresenterControls } from "@/components/presenter/PresenterControls";
+import { PollResultsNav } from "@/components/poll/PollResultsNav";
 import { useHostSession } from "@/hooks/useHostSession";
 import { usePollResults } from "@/hooks/usePollResults";
+import { truncateLabel } from "@/lib/truncate-label";
 import type { HostPollProps, HostSessionProps } from "@/lib/serialize-host-data";
 
 interface PresenterViewProps {
@@ -25,9 +28,40 @@ export function PresenterView({
     initialSession,
     initialPolls,
   });
-  const chartData = usePollResults(activePoll);
+  const [viewingPollId, setViewingPollId] = useState<string | null>(null);
+  const lastActivePollId = useRef<string | null>(null);
   const [showJoinCode, setShowJoinCode] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (activePoll) {
+      const prevActive = lastActivePollId.current;
+      lastActivePollId.current = activePoll.id;
+      if (prevActive !== activePoll.id) {
+        setViewingPollId(activePoll.id);
+      }
+      return;
+    }
+    if (lastActivePollId.current) {
+      setViewingPollId(lastActivePollId.current);
+      lastActivePollId.current = null;
+      return;
+    }
+    if (polls.length === 0) {
+      setViewingPollId(null);
+      return;
+    }
+    setViewingPollId((current) => {
+      if (current && polls.some((p) => p.id === current)) return current;
+      return polls[0].id;
+    });
+  }, [activePoll, polls]);
+
+  const displayPoll =
+    polls.find((p) => p.id === viewingPollId) ?? activePoll ?? polls[0] ?? null;
+  const chartData = usePollResults(displayPoll);
+  const isViewingLive = !!activePoll && displayPoll?.id === activePoll.id;
+  const showResults = polls.length > 0 && (activePoll || !session.isActive);
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -59,8 +93,15 @@ export function PresenterView({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [toggleFullscreen]);
 
-  const isLive = !!activePoll && session.isActive;
   const isEnded = !session.isActive;
+  const joinPanel = (
+    <PresenterJoinPanel
+      sessionId={session.id}
+      code={session.code}
+      sessionName={session.name}
+      compact={!!activePoll}
+    />
+  );
 
   return (
     <div
@@ -72,7 +113,7 @@ export function PresenterView({
           <h1 className="text-lg sm:text-xl font-semibold truncate">{session.name}</h1>
         </div>
         <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-          {isLive && (
+          {isViewingLive && (
             <>
               <span
                 className="inline-flex items-center gap-1.5 rounded-full bg-red-600/90 px-3 py-1 text-xs font-bold uppercase tracking-wide"
@@ -85,6 +126,11 @@ export function PresenterView({
                 {chartData.totalVotes} vote{chartData.totalVotes !== 1 ? "s" : ""}
               </span>
             </>
+          )}
+          {!isViewingLive && displayPoll && (
+            <span className="text-sm text-slate-400 tabular-nums" aria-live="polite">
+              {chartData.totalVotes} vote{chartData.totalVotes !== 1 ? "s" : ""}
+            </span>
           )}
           <button
             type="button"
@@ -118,30 +164,53 @@ export function PresenterView({
               Back to control panel
             </Link>
           </div>
-        ) : isLive ? (
+        ) : showResults ? (
           <div className="h-full flex flex-col lg:flex-row min-h-0">
-            <div className="flex-1 flex flex-col min-h-0 p-4 sm:p-6 lg:p-8">
-              <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4 lg:mb-6 leading-tight">
-                {activePoll!.question}
-              </h2>
-              <div className="flex-1 min-h-0">
-                <LiveBarChart
-                  data={chartData}
-                  size="presenter"
-                  hideVoteLine
+            <div className="flex-1 flex flex-col min-h-0 p-4 sm:p-6 lg:p-8 min-w-0">
+              {displayPoll && polls.length > 1 && viewingPollId && (
+                <PollResultsNav
+                  polls={polls}
+                  currentPollId={viewingPollId}
+                  onSelect={setViewingPollId}
+                  variant="presenter"
                 />
+              )}
+              {displayPoll && (
+                <h2
+                  className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-4 lg:mb-6 leading-tight line-clamp-3"
+                  title={displayPoll.question}
+                >
+                  {truncateLabel(displayPoll.question, 160)}
+                </h2>
+              )}
+              <div className="flex-1 min-h-0 min-w-0">
+                {displayPoll ? (
+                  <LiveBarChart
+                    data={chartData}
+                    size="presenter"
+                    hideVoteLine
+                  />
+                ) : null}
               </div>
             </div>
-            {showJoinCode && (
-              <aside className="lg:w-80 xl:w-96 shrink-0 border-t lg:border-t-0 lg:border-l border-slate-800 p-4 lg:p-6">
-                <PresenterJoinPanel
-                  sessionId={session.id}
-                  code={session.code}
-                  sessionName={session.name}
-                  compact
-                />
-              </aside>
-            )}
+            <aside
+              className={cn(
+                "shrink-0 border-t lg:border-t-0 lg:border-l border-slate-800 overflow-hidden transition-[width,padding,opacity] duration-200 ease-out",
+                showJoinCode
+                  ? "lg:w-80 xl:w-96 opacity-100 p-4 lg:p-6 visible"
+                  : "w-0 max-w-0 p-0 opacity-0 border-0 invisible lg:w-0 lg:max-w-0"
+              )}
+              aria-hidden={!showJoinCode}
+            >
+              <div
+                className={cn(
+                  "min-w-[200px]",
+                  !showJoinCode && "pointer-events-none"
+                )}
+              >
+                {joinPanel}
+              </div>
+            </aside>
           </div>
         ) : (
           <div className="h-full flex flex-col items-center justify-center px-4 py-8 gap-6">
@@ -149,13 +218,19 @@ export function PresenterView({
             <p className="text-slate-500 text-sm text-center max-w-md">
               Launch a poll below or from the control panel
             </p>
-            {showJoinCode && (
+            <div
+              className={cn(
+                "transition-opacity duration-200",
+                showJoinCode ? "opacity-100 visible" : "opacity-0 invisible h-0 overflow-hidden"
+              )}
+              aria-hidden={!showJoinCode}
+            >
               <PresenterJoinPanel
                 sessionId={session.id}
                 code={session.code}
                 sessionName={session.name}
               />
-            )}
+            </div>
           </div>
         )}
       </main>

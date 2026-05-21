@@ -45,8 +45,11 @@ export function SessionControlClient({
 
   useEffect(() => {
     if (activePoll) {
+      const prevActive = lastActivePollId.current;
       lastActivePollId.current = activePoll.id;
-      setSelectedPollId(activePoll.id);
+      if (prevActive !== activePoll.id) {
+        setSelectedPollId(activePoll.id);
+      }
       return;
     }
     if (lastActivePollId.current) {

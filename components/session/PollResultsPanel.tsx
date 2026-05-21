@@ -5,6 +5,8 @@ import { Card, CardTitle } from "@/components/ui/Card";
 import { LiveBarChart } from "@/components/charts/LiveBarChart";
 import { usePollResults } from "@/hooks/usePollResults";
 import { Badge } from "@/components/ui/Badge";
+import { PollResultsNav } from "@/components/poll/PollResultsNav";
+import { truncateLabel } from "@/lib/truncate-label";
 
 interface PollResultsPanelProps {
   polls: Poll[];
@@ -20,45 +22,46 @@ export function PollResultsPanel({
   onSelectPoll,
 }: PollResultsPanelProps) {
   const displayPoll =
-    activePoll ?? polls.find((p) => p.id === selectedPollId) ?? polls[0] ?? null;
+    polls.find((p) => p.id === selectedPollId) ??
+    activePoll ??
+    polls[0] ??
+    null;
   const chartData = usePollResults(displayPoll);
+  const isViewingLive = !!activePoll && displayPoll?.id === activePoll.id;
 
   return (
     <Card>
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div>
-          <CardTitle>{activePoll ? "Live results" : "Poll results"}</CardTitle>
+          <CardTitle>{isViewingLive ? "Live results" : "Poll results"}</CardTitle>
           <p className="text-xs text-slate-500 mt-1">
-            {activePoll
+            {isViewingLive
               ? "Updates in real time while the poll is live."
-              : "Votes are saved after you close a poll. Pick a poll to review."}
+              : "Votes are saved after you close a poll. Use Back / Next to browse polls."}
           </p>
         </div>
-        {activePoll && <Badge variant="live">Live</Badge>}
+        {isViewingLive && <Badge variant="live">Live</Badge>}
       </div>
 
-      {!activePoll && polls.length > 1 && (
-        <div className="mt-4">
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            View results for
-          </label>
-          <select
-            value={displayPoll?.id ?? ""}
-            onChange={(e) => onSelectPoll(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            {polls.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.question}
-              </option>
-            ))}
-          </select>
-        </div>
+      {displayPoll && polls.length > 1 && (
+        <PollResultsNav
+          polls={polls}
+          currentPollId={displayPoll.id}
+          onSelect={onSelectPoll}
+        />
       )}
 
       <div className="mt-4">
         {displayPoll ? (
-          <LiveBarChart data={chartData} question={displayPoll.question} />
+          <>
+            <p
+              className="text-sm font-medium text-slate-800 mb-3 line-clamp-2"
+              title={displayPoll.question}
+            >
+              {truncateLabel(displayPoll.question, 120)}
+            </p>
+            <LiveBarChart data={chartData} />
+          </>
         ) : (
           <p className="text-sm text-slate-500 py-8 text-center">
             Create and launch a poll to see results here.
