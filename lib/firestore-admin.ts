@@ -12,6 +12,8 @@ import {
   normalizePollOptions,
 } from "./poll-options";
 import type { Poll, Response, Session } from "@/types";
+import { buildPollChartData } from "./poll-chart";
+import type { JoinLivePayload } from "./join-live-types";
 import { sortPolls } from "./sort-polls";
 
 export { isAdminConfigured };
@@ -151,7 +153,6 @@ export async function getSessionHostAdmin(
   const pollsSnap = await getAdminDb()
     .collection("polls")
     .where("sessionId", "==", sessionId)
-    .orderBy("createdAt", "desc")
     .get();
 
   return {
@@ -402,9 +403,39 @@ export async function getPollsForSessionAdmin(sessionId: string): Promise<Poll[]
   const snap = await getAdminDb()
     .collection("polls")
     .where("sessionId", "==", sessionId)
-    .orderBy("createdAt", "desc")
     .get();
   return sortPolls(snap.docs.map((d) => mapAdminPoll(d.id, d.data())));
+}
+
+/** Live state for participants when Firestore listeners are unavailable. */
+export async function getJoinLiveAdmin(code: string): Promise<JoinLivePayload | null> {
+  const session = await getSessionByCodeAdmin(code);
+  if (!session) return null;
+
+  const polls = await getPollsForSessionAdmin(session.id);
+  const activePoll = polls.find((p) => p.isActive) ?? null;
+
+  let chart = null;
+  if (activePoll) {
+    const responses = await getResponsesForPollAdmin(activePoll.id);
+    chart = buildPollChartData(activePoll.options, responses);
+  }
+
+  return {
+    session,
+    activePoll: activePoll
+      ? {
+          id: activePoll.id,
+          sessionId: activePoll.sessionId,
+          sessionCode: activePoll.sessionCode,
+          question: activePoll.question,
+          options: activePoll.options,
+          isActive: activePoll.isActive,
+          sortOrder: activePoll.sortOrder,
+        }
+      : null,
+    chart,
+  };
 }
 
 export async function getResponsesForPollAdmin(pollId: string): Promise<Response[]> {

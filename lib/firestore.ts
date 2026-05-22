@@ -209,11 +209,7 @@ export function subscribeToSessionPolls(
   callback: (polls: Poll[]) => void,
   onError?: (error: FirestoreError) => void
 ): Unsubscribe {
-  const q = query(
-    pollsCol(),
-    where("sessionId", "==", sessionId),
-    orderBy("createdAt", "desc")
-  );
+  const q = query(pollsCol(), where("sessionId", "==", sessionId));
   return onSnapshot(
     q,
     (snap) => {
@@ -317,11 +313,7 @@ export function subscribeToPollResponses(
 }
 
 export async function getPollsForSession(sessionId: string): Promise<Poll[]> {
-  const q = query(
-    pollsCol(),
-    where("sessionId", "==", sessionId),
-    orderBy("createdAt", "desc")
-  );
+  const q = query(pollsCol(), where("sessionId", "==", sessionId));
   const snap = await getDocs(q);
   return sortPolls(snap.docs.map((d) => mapPoll(d.id, d.data())));
 }

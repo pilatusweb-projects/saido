@@ -9,7 +9,9 @@ import { PresenterControls } from "@/components/presenter/PresenterControls";
 import { PollResultsNav } from "@/components/poll/PollResultsNav";
 import { useHostSession } from "@/hooks/useHostSession";
 import { usePollResults } from "@/hooks/usePollResults";
+import { hostFetch } from "@/lib/host-api";
 import { truncateLabel } from "@/lib/truncate-label";
+import { toast } from "@/lib/toast";
 import type { HostPollProps, HostSessionProps } from "@/lib/serialize-host-data";
 
 interface PresenterViewProps {
@@ -32,6 +34,7 @@ export function PresenterView({
   const lastActivePollId = useRef<string | null>(null);
   const [showJoinCode, setShowJoinCode] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [switchingPoll, setSwitchingPoll] = useState(false);
 
   useEffect(() => {
     if (activePoll) {
@@ -62,6 +65,31 @@ export function PresenterView({
   const chartData = usePollResults(displayPoll);
   const isViewingLive = !!activePoll && displayPoll?.id === activePoll.id;
   const showResults = polls.length > 0 && (activePoll || !session.isActive);
+
+  /** Slido-style: changing question in presenter view also launches it for participants. */
+  const handleSelectPoll = useCallback(
+    async (pollId: string) => {
+      setViewingPollId(pollId);
+      if (!session.isActive || pollId === activePoll?.id || switchingPoll) return;
+
+      setSwitchingPoll(true);
+      try {
+        const res = await hostFetch(
+          `/api/session/${sessionId}/polls/${pollId}/launch`,
+          { method: "POST" }
+        );
+        if (!res.ok) {
+          const data = (await res.json()) as { error?: string };
+          throw new Error(data.error ?? "Could not switch question.");
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not switch question.");
+      } finally {
+        setSwitchingPoll(false);
+      }
+    },
+    [sessionId, session.isActive, activePoll?.id, switchingPoll]
+  );
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
@@ -171,8 +199,10 @@ export function PresenterView({
                 <PollResultsNav
                   polls={polls}
                   currentPollId={viewingPollId}
-                  onSelect={setViewingPollId}
+                  onSelect={(id) => void handleSelectPoll(id)}
                   variant="presenter"
+                  disabled={switchingPoll}
+                  liveNavigation={session.isActive}
                 />
               )}
               {displayPoll && (

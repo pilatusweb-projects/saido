@@ -1,25 +1,16 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import {
-  subscribeToSessionByCode,
-  subscribeToActivePoll,
-  submitResponse,
-  hasVoted,
-} from "@/lib/firestore";
+import { submitResponse, hasVoted } from "@/lib/firestore";
 import { getParticipantId } from "@/lib/participant";
+import { useJoinLive } from "@/hooks/useJoinLive";
 import { LiveBarChart } from "@/components/charts/LiveBarChart";
-import { usePollResults } from "@/hooks/usePollResults";
 import { Card, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import Link from "next/link";
-import type { Session, Poll } from "@/types";
 
-type JoinSession = Pick<Session, "id" | "code" | "name" | "isActive">;
-
-const TIMEOUT_MS = 8_000;
 const joinedKey = (code: string) => `saido_joined_${code}`;
 const displayNameKey = (code: string) => `saido_display_name_${code}`;
 
@@ -31,19 +22,18 @@ export default function JoinPage({
   const { code } = use(params);
   const sessionCode = code.toUpperCase().trim();
 
-  const [session, setSession] = useState<JoinSession | null | "loading">("loading");
-  const [activePoll, setActivePoll] = useState<Poll | null>(null);
+  const { session, activePoll, chartData, usingServerSync } =
+    useJoinLive(sessionCode);
+
   const [name, setName] = useState("");
   const [nameSet, setNameSet] = useState(false);
   const [voted, setVoted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [voteError, setVoteError] = useState("");
 
-  // Subscribe to the session document by code.
   useEffect(() => {
-    setSession("loading");
-    setActivePoll(null);
     setVoted(false);
+    setVoteError("");
     setNameSet(false);
     if (typeof window !== "undefined") {
       const saved = sessionStorage.getItem(displayNameKey(sessionCode));
@@ -52,50 +42,17 @@ export default function JoinPage({
         setNameSet(true);
       }
     }
-
-    // Timeout: if Firestore hasn't responded after 8s, show an error.
-    const timeout = setTimeout(() => {
-      setSession((current) => (current === "loading" ? null : current));
-    }, TIMEOUT_MS);
-
-    const unsub = subscribeToSessionByCode(
-      sessionCode,
-      (s) => {
-        clearTimeout(timeout);
-        setSession(
-          s
-            ? { id: s.id, code: s.code, name: s.name, isActive: s.isActive }
-            : null
-        );
-      },
-      () => {
-        clearTimeout(timeout);
-        setSession(null);
-      }
-    );
-
-    return () => {
-      clearTimeout(timeout);
-      unsub();
-    };
   }, [sessionCode]);
 
-  // Subscribe to the active poll once we have a live session.
   useEffect(() => {
-    if (!session || session === "loading" || !session.isActive) return;
-    const unsub = subscribeToActivePoll(sessionCode, setActivePoll);
-    return unsub;
-  }, [session, sessionCode]);
-
-  // Check whether this participant already voted on the new poll.
-  useEffect(() => {
-    if (!activePoll) { setVoted(false); return; }
+    if (!activePoll) {
+      setVoted(false);
+      return;
+    }
     const participantId = getParticipantId(sessionCode);
     if (!participantId) return;
     hasVoted(activePoll.id, participantId).then(setVoted);
   }, [activePoll, sessionCode]);
-
-  const chartData = usePollResults(activePoll);
 
   function handleContinue() {
     const trimmed = name.trim();
@@ -139,7 +96,6 @@ export default function JoinPage({
     }
   }
 
-  // --- Loading ---
   if (session === "loading") {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-3">
@@ -149,7 +105,6 @@ export default function JoinPage({
     );
   }
 
-  // --- Not found ---
   if (!session) {
     return (
       <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
@@ -170,7 +125,6 @@ export default function JoinPage({
     );
   }
 
-  // --- Session ended ---
   if (!session.isActive) {
     return (
       <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
@@ -185,7 +139,6 @@ export default function JoinPage({
     );
   }
 
-  // --- Join step: optional name (Slido-style — Continue works without a name) ---
   if (!nameSet) {
     return (
       <div className="max-w-md mx-auto px-4 py-12">
@@ -221,9 +174,14 @@ export default function JoinPage({
     );
   }
 
-  // --- Live session view ---
   return (
     <div className="max-w-lg mx-auto px-4 py-8 space-y-5">
+      {usingServerSync && (
+        <p className="text-center text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+          Live updates via server — reconnecting to real-time sync when available.
+        </p>
+      )}
+
       <div className="text-center">
         {session.name && (
           <p className="font-semibold text-slate-800">{session.name}</p>

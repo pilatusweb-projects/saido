@@ -9,6 +9,9 @@ interface PollResultsNavProps {
   currentPollId: string;
   onSelect: (pollId: string) => void;
   variant?: "default" | "presenter";
+  disabled?: boolean;
+  /** When true, prev/next labels match Slido-style live question switching */
+  liveNavigation?: boolean;
 }
 
 export function PollResultsNav({
@@ -16,6 +19,8 @@ export function PollResultsNav({
   currentPollId,
   onSelect,
   variant = "default",
+  disabled = false,
+  liveNavigation = false,
 }: PollResultsNavProps) {
   if (polls.length <= 1) return null;
 
@@ -46,8 +51,13 @@ export function PollResultsNav({
         isPresenter ? "mb-4" : "mt-4"
       )}
     >
-      <button type="button" className={btnClass} onClick={goPrev} disabled={!canPrev}>
-        Back
+      <button
+        type="button"
+        className={btnClass}
+        onClick={goPrev}
+        disabled={disabled || !canPrev}
+      >
+        {liveNavigation ? "Previous question" : "Back"}
       </button>
       <span
         className={cn(
@@ -63,8 +73,13 @@ export function PollResultsNav({
           {truncateLabel(current?.question ?? "", 48)}
         </span>
       </span>
-      <button type="button" className={btnClass} onClick={goNext} disabled={!canNext}>
-        Next
+      <button
+        type="button"
+        className={btnClass}
+        onClick={goNext}
+        disabled={disabled || !canNext}
+      >
+        {liveNavigation ? "Next question" : "Next"}
       </button>
     </div>
   );

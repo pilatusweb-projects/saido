@@ -1,6 +1,9 @@
 import type { Poll } from "@/types";
 
-/** Host-facing poll order (explicit sortOrder, else legacy newest-first). */
+/**
+ * Slido-style order: first poll in the list = 1, then 2, 3…
+ * Uses explicit `sortOrder` when set; otherwise oldest-first by creation time.
+ */
 export function sortPolls(polls: Poll[]): Poll[] {
   return [...polls].sort((a, b) => {
     const ao = a.sortOrder;
@@ -8,6 +11,6 @@ export function sortPolls(polls: Poll[]): Poll[] {
     if (ao != null && bo != null) return ao - bo;
     if (ao != null) return -1;
     if (bo != null) return 1;
-    return b.createdAt.toMillis() - a.createdAt.toMillis();
+    return a.createdAt.toMillis() - b.createdAt.toMillis();
   });
 }
