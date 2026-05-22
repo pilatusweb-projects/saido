@@ -141,8 +141,8 @@ export function SessionControlClient({
           </Link>
           <h1 className="text-2xl font-bold saido-heading mt-1">Session control</h1>
           {usingServerSync && (
-            <p className="text-xs text-amber-700 mt-1 bg-amber-50 rounded px-2 py-0.5 inline-block">
-              Syncing via server (Firestore unavailable on this network)
+            <p className="text-xs text-amber-800 mt-1 bg-amber-50 rounded-lg px-2.5 py-1 inline-block border border-amber-200/80">
+              Live sync delayed — refreshing every few seconds. Your session still works.
             </p>
           )}
           <SessionNameEditor sessionId={session.id} initialName={session.name} />

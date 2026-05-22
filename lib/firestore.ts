@@ -159,15 +159,20 @@ export function subscribeToHostSessions(
 
 export function subscribeToSession(
   id: string,
-  callback: (session: Session | null) => void
+  callback: (session: Session | null) => void,
+  onError?: (error: FirestoreError) => void
 ): Unsubscribe {
-  return onSnapshot(doc(getDb(), "sessions", id), (snap) => {
-    if (!snap.exists()) {
-      callback(null);
-      return;
-    }
-    callback(mapSession(snap.id, snap.data()));
-  });
+  return onSnapshot(
+    doc(getDb(), "sessions", id),
+    (snap) => {
+      if (!snap.exists()) {
+        callback(null);
+        return;
+      }
+      callback(mapSession(snap.id, snap.data()));
+    },
+    onError
+  );
 }
 
 export async function createPoll(
