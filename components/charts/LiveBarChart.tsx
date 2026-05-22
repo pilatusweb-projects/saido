@@ -13,9 +13,8 @@ import {
 } from "chart.js";
 import { Bar } from "react-chartjs-2";
 import type { PollChartData } from "@/hooks/usePollResults";
-import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { getBarChartColors } from "@/lib/chart-colors";
-import { truncateLabel } from "@/lib/truncate-label";
+import { cn } from "@/lib/utils";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -27,6 +26,71 @@ interface LiveBarChartProps {
   hideVoteLine?: boolean;
 }
 
+/** Short column keys under vertical bars (A, B, …) — full text lives in the legend */
+function columnKeys(count: number): string[] {
+  return Array.from({ length: count }, (_, i) =>
+    i < 26 ? String.fromCharCode(65 + i) : String(i + 1)
+  );
+}
+
+function ChartOptionLegend({
+  labels,
+  values,
+  colors,
+  pollId,
+  isPresenter,
+}: {
+  labels: string[];
+  values: number[];
+  colors: ReturnType<typeof getBarChartColors>;
+  pollId?: string;
+  isPresenter: boolean;
+}) {
+  const keys = columnKeys(labels.length);
+
+  return (
+    <ul
+      className={cn(
+        "mt-4 space-y-3",
+        isPresenter ? "border-t border-slate-700 pt-4" : "border-t border-slate-100 pt-4"
+      )}
+      aria-label="Poll options"
+    >
+      {labels.map((label, i) => (
+        <li
+          key={`${pollId ?? "opt"}-${i}`}
+          className="grid grid-cols-[auto_1fr_auto] items-start gap-x-3 gap-y-0.5"
+        >
+          <span
+            className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-bold text-white"
+            style={{ backgroundColor: colors.backgroundColor[i] }}
+            aria-hidden
+          >
+            {keys[i]}
+          </span>
+          <p
+            className={cn(
+              "min-w-0 text-sm leading-snug break-words",
+              isPresenter ? "text-slate-300" : "text-slate-700"
+            )}
+            title={label}
+          >
+            {label}
+          </p>
+          <span
+            className={cn(
+              "shrink-0 tabular-nums text-sm font-semibold",
+              isPresenter ? "text-slate-100" : "text-slate-900"
+            )}
+          >
+            {values[i] ?? 0}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function LiveBarChart({
   data,
   question,
@@ -35,27 +99,18 @@ export function LiveBarChart({
   hideVoteLine = false,
 }: LiveBarChartProps) {
   const isPresenter = size === "presenter";
-  const isMobile = useMediaQuery("(max-width: 639px)");
-  const isNarrowViewport = useMediaQuery("(max-width: 1023px)");
-  const useHorizontal = (!isPresenter && isMobile) || (isPresenter && isNarrowViewport);
-
   const empty = data.labels.length === 0;
   const fullLabels = data.labels;
+  const shortLabels = useMemo(() => columnKeys(fullLabels.length), [fullLabels.length]);
 
   const colors = useMemo(
     () => getBarChartColors(fullLabels.length),
     [fullLabels.length]
   );
 
-  const axisLabelLen = useHorizontal ? 36 : isPresenter ? 22 : 28;
-  const displayLabels = useMemo(
-    () => fullLabels.map((l) => truncateLabel(l, axisLabelLen)),
-    [fullLabels, axisLabelLen]
-  );
-
   const chartData = useMemo(
     () => ({
-      labels: displayLabels,
+      labels: shortLabels,
       datasets: [
         {
           label: "Votes",
@@ -64,17 +119,16 @@ export function LiveBarChart({
           borderColor: colors.borderColor,
           hoverBackgroundColor: colors.hoverBackgroundColor,
           borderWidth: 2,
-          borderRadius: 6,
+          borderRadius: 8,
           borderSkipped: false,
         },
       ],
     }),
-    [displayLabels, data.values, colors]
+    [shortLabels, data.values, colors]
   );
 
   const options = useMemo(
     () => ({
-      indexAxis: useHorizontal ? ("y" as const) : ("x" as const),
       responsive: true,
       maintainAspectRatio: false,
       animation: false as const,
@@ -83,9 +137,7 @@ export function LiveBarChart({
         resize: { animation: { duration: 200 } },
       },
       layout: {
-        padding: useHorizontal
-          ? { left: 4, right: 12, top: 4, bottom: 4 }
-          : { left: 0, right: 0, top: 0, bottom: 8 },
+        padding: { top: 4, right: 8, bottom: 4, left: 4 },
       },
       plugins: {
         legend: { display: false },
@@ -113,82 +165,46 @@ export function LiveBarChart({
             label: (ctx: TooltipItem<"bar">) => {
               const i = ctx.dataIndex ?? 0;
               const name = fullLabels[i] ?? "";
-              const votes = useHorizontal
-                ? (ctx.parsed.x ?? 0)
-                : (ctx.parsed.y ?? 0);
+              const votes = ctx.parsed.y ?? 0;
               return `${name}: ${votes} vote${votes !== 1 ? "s" : ""}`;
             },
           },
         },
       },
-      scales: useHorizontal
-        ? {
-            x: {
-              beginAtZero: true,
-              ticks: {
-                stepSize: 1,
-                precision: 0,
-                color: isPresenter ? "#94a3b8" : "#64748b",
-                font: { size: 11 },
-              },
-              grid: {
-                color: isPresenter
-                  ? "rgba(148, 163, 184, 0.15)"
-                  : "rgba(148, 163, 184, 0.25)",
-              },
-              border: { display: false },
-            },
-            y: {
-              ticks: {
-                color: isPresenter ? "#cbd5e1" : "#475569",
-                font: { size: 11 },
-                autoSkip: false,
-                crossAlign: "far" as const,
-              },
-              grid: { display: false },
-              border: { display: false },
-            },
-          }
-        : {
-            y: {
-              beginAtZero: true,
-              ticks: {
-                stepSize: 1,
-                precision: 0,
-                color: isPresenter ? "#94a3b8" : "#64748b",
-                font: { size: isPresenter ? 14 : 11 },
-              },
-              grid: {
-                color: isPresenter
-                  ? "rgba(148, 163, 184, 0.15)"
-                  : "rgba(148, 163, 184, 0.25)",
-              },
-              border: { display: false },
-            },
-            x: {
-              ticks: {
-                color: isPresenter ? "#cbd5e1" : "#475569",
-                font: {
-                  size: isPresenter ? 13 : 11,
-                  weight: isPresenter ? ("bold" as const) : undefined,
-                },
-                maxRotation: 0,
-                minRotation: 0,
-                autoSkip: false,
-              },
-              grid: { display: false },
-              border: { display: false },
-            },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            stepSize: 1,
+            precision: 0,
+            color: isPresenter ? "#94a3b8" : "#64748b",
+            font: { size: isPresenter ? 14 : 11 },
           },
+          grid: {
+            color: isPresenter
+              ? "rgba(148, 163, 184, 0.15)"
+              : "rgba(148, 163, 184, 0.25)",
+          },
+          border: { display: false },
+        },
+        x: {
+          ticks: {
+            color: isPresenter ? "#cbd5e1" : "#475569",
+            font: {
+              size: isPresenter ? 14 : 12,
+              weight: "bold" as const,
+            },
+            maxRotation: 0,
+            minRotation: 0,
+            autoSkip: false,
+          },
+          grid: { display: false },
+          border: { display: false },
+        },
+      },
     }),
-    [isPresenter, question, fullLabels, useHorizontal]
+    [isPresenter, question, fullLabels]
   );
-
-  const chartHeight = useHorizontal
-    ? Math.max(isPresenter ? 200 : 140, fullLabels.length * 44 + 32)
-    : isPresenter
-      ? undefined
-      : 224;
 
   if (empty) {
     return (
@@ -211,64 +227,26 @@ export function LiveBarChart({
 
       <div
         className={
-          isPresenter && !useHorizontal
-            ? "flex-1 min-h-[280px] sm:min-h-[360px] lg:min-h-[420px] overflow-hidden"
-            : "overflow-hidden w-full"
-        }
-        style={
-          useHorizontal
-            ? { height: chartHeight, minHeight: chartHeight }
-            : isPresenter
-              ? undefined
-              : { height: chartHeight }
+          isPresenter
+            ? "flex-1 min-h-[200px] sm:min-h-[260px] lg:min-h-[320px] overflow-hidden"
+            : "h-52 sm:h-60 overflow-hidden w-full"
         }
       >
         <Bar
-          key={`${pollId ?? "chart"}-${useHorizontal ? "h" : "v"}`}
+          key={pollId ?? "chart"}
           data={chartData}
           options={options}
           updateMode="none"
         />
       </div>
 
-      {useHorizontal && (
-        <ul
-          className={
-            isPresenter
-              ? "mt-3 space-y-2 border-t border-slate-700 pt-3"
-              : "mt-3 space-y-2 border-t border-slate-100 pt-3"
-          }
-          aria-label="Poll options"
-        >
-          {fullLabels.map((label, i) => (
-            <li key={`${pollId ?? "opt"}-${i}`} className="flex items-start gap-2 text-xs">
-              <span
-                className="mt-1 h-2.5 w-2.5 shrink-0 rounded-sm"
-                style={{ backgroundColor: colors.backgroundColor[i] }}
-                aria-hidden
-              />
-              <span
-                className={
-                  isPresenter
-                    ? "min-w-0 flex-1 break-words text-slate-300 leading-snug"
-                    : "min-w-0 flex-1 break-words text-slate-600 leading-snug"
-                }
-              >
-                {label}
-              </span>
-              <span
-                className={
-                  isPresenter
-                    ? "shrink-0 tabular-nums font-medium text-slate-100"
-                    : "shrink-0 tabular-nums font-medium text-slate-800"
-                }
-              >
-                {data.values[i] ?? 0}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ChartOptionLegend
+        labels={fullLabels}
+        values={data.values}
+        colors={colors}
+        pollId={pollId}
+        isPresenter={isPresenter}
+      />
     </div>
   );
 }
