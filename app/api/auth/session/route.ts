@@ -5,8 +5,25 @@ import {
   SESSION_COOKIE_NAME,
   createSessionCookieFromIdToken,
   sessionCookieOptions,
+  verifySessionCookieValue,
 } from "@/lib/auth-session";
 import { checkRateLimit } from "@/lib/rate-limit";
+
+export async function GET(request: Request) {
+  const cookie = request.headers.get("cookie") ?? "";
+  const match = cookie
+    .split(";")
+    .map((c) => c.trim())
+    .find((c) => c.startsWith(`${SESSION_COOKIE_NAME}=`));
+  const value = match
+    ? decodeURIComponent(match.slice(SESSION_COOKIE_NAME.length + 1))
+    : "";
+  if (!value) {
+    return NextResponse.json({ authenticated: false });
+  }
+  const verified = await verifySessionCookieValue(value);
+  return NextResponse.json({ authenticated: !!verified });
+}
 
 export async function POST(request: Request) {
   const rate = checkRateLimit(request, "auth-session");
@@ -16,7 +33,7 @@ export async function POST(request: Request) {
 
   if (!isAdminConfigured()) {
     return NextResponse.json(
-      { error: "Server auth is not configured. Add FIREBASE_SERVICE_ACCOUNT_KEY." },
+      { error: "Sign-in is temporarily unavailable. Please try again later." },
       { status: 503 }
     );
   }

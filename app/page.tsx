@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 
 export default function HomePage() {
-  const { user } = useAuth();
+  const { user, serverSession } = useAuth();
   const router = useRouter();
   const [joinCode, setJoinCode] = useState("");
 
@@ -31,7 +31,7 @@ export default function HomePage() {
         </p>
 
         <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-          <Link href={user ? "/dashboard" : "/login"}>
+          <Link href={user && serverSession ? "/dashboard" : "/login"}>
             <Button size="lg" className="w-full sm:w-auto min-w-[200px]">
               Create session
             </Button>

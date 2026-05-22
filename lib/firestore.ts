@@ -26,6 +26,7 @@ import {
   normalizePollOptions,
   duplicateOptionsMessage,
 } from "./poll-options";
+import { sortPolls } from "./sort-polls";
 
 function sessionsCol() {
   return collection(getDb(), "sessions");
@@ -49,6 +50,11 @@ function mapSession(id: string, data: Record<string, unknown>): Session {
 }
 
 function mapPoll(id: string, data: Record<string, unknown>): Poll {
+  const createdAt = data.createdAt as Poll["createdAt"];
+  const sortOrder =
+    typeof data.sortOrder === "number"
+      ? data.sortOrder
+      : createdAt?.toMillis?.() ?? undefined;
   return {
     id,
     sessionId: data.sessionId as string,
@@ -56,7 +62,8 @@ function mapPoll(id: string, data: Record<string, unknown>): Poll {
     question: data.question as string,
     options: data.options as string[],
     isActive: data.isActive as boolean,
-    createdAt: data.createdAt as Poll["createdAt"],
+    sortOrder,
+    createdAt,
   };
 }
 
@@ -191,6 +198,7 @@ export async function createPoll(
     question,
     options: normalized,
     isActive: false,
+    sortOrder: Date.now(),
     createdAt: serverTimestamp(),
   });
   return ref.id;
@@ -209,7 +217,7 @@ export function subscribeToSessionPolls(
   return onSnapshot(
     q,
     (snap) => {
-      callback(snap.docs.map((d) => mapPoll(d.id, d.data())));
+      callback(sortPolls(snap.docs.map((d) => mapPoll(d.id, d.data()))));
     },
     onError
   );
@@ -315,7 +323,7 @@ export async function getPollsForSession(sessionId: string): Promise<Poll[]> {
     orderBy("createdAt", "desc")
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => mapPoll(d.id, d.data()));
+  return sortPolls(snap.docs.map((d) => mapPoll(d.id, d.data())));
 }
 
 export async function getResponsesForPoll(pollId: string): Promise<Response[]> {

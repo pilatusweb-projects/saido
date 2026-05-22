@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/components/providers/AuthProvider";
 
 const ERROR_MESSAGES: Record<string, string> = {
   "auth/invalid-email": "Invalid email address.",
@@ -23,11 +24,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   "auth/weak-password": "Password must be at least 6 characters.",
   "auth/invalid-credential": "Invalid email or password.",
   "auth/unauthorized-domain":
-    "This site URL is not allowed in Firebase. Add your Vercel domain under Authentication → Settings → Authorized domains.",
+    "This site is not authorized for sign-in. Please contact the person who invited you.",
   "auth/network-request-failed":
-    "Cannot reach Firebase Auth from this browser. Trying server sign-in…",
+    "Connection problem. Trying again…",
   "server-auth-not-configured":
-    "Server sign-in is not set up. Add FIREBASE_SERVICE_ACCOUNT_KEY on Vercel (see README).",
+    "Sign-in is temporarily unavailable. Please try again in a few minutes.",
 };
 
 function getAuthErrorMessage(err: unknown): string {
@@ -35,7 +36,15 @@ function getAuthErrorMessage(err: unknown): string {
   if (firebaseErr.code && ERROR_MESSAGES[firebaseErr.code]) {
     return ERROR_MESSAGES[firebaseErr.code];
   }
-  if (firebaseErr.message) return firebaseErr.message;
+  const msg = firebaseErr.message ?? "";
+  if (
+    /FIREBASE_SERVICE_ACCOUNT|\.env|not configured|Admin SDK/i.test(msg)
+  ) {
+    return "Sign-in is temporarily unavailable. Please try again in a few minutes.";
+  }
+  if (msg && !msg.includes("Firebase") && !msg.includes("token")) {
+    return msg;
+  }
   return "Something went wrong. Please try again.";
 }
 
@@ -51,6 +60,7 @@ export function AuthForm({ mode }: AuthFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next");
+  const { user, serverSession, loading: authLoading } = useAuth();
 
   function redirectAfterAuth() {
     const target =
@@ -105,6 +115,13 @@ export function AuthForm({ mode }: AuthFormProps) {
           ? "Sign in to manage your sessions"
           : "Sign up to start hosting polls"}
       </p>
+
+      {!authLoading && user && !serverSession && (
+        <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+          Your previous sign-in could not be completed. Enter your email and password
+          below to continue.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>

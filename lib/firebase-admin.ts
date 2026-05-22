@@ -1,5 +1,6 @@
 import { initializeApp, getApps, cert, type App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { loadServiceAccountJson } from "./load-service-account";
 
 let _app: App | null = null;
 let _initError: string | null = null;
@@ -8,9 +9,9 @@ export function getAdminApp(): App | null {
   if (_app) return _app;
   if (_initError) return null;
 
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  const { json, error } = loadServiceAccountJson();
   if (!json) {
-    _initError = "FIREBASE_SERVICE_ACCOUNT_KEY is not set.";
+    _initError = error ?? "Service account not configured.";
     return null;
   }
 
@@ -18,7 +19,7 @@ export function getAdminApp(): App | null {
   try {
     serviceAccount = JSON.parse(json);
   } catch {
-    _initError = "FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON.";
+    _initError = "Service account JSON is invalid.";
     return null;
   }
 

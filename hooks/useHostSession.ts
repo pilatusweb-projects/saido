@@ -9,6 +9,7 @@ import {
   type HostPollProps,
   type HostSessionProps,
 } from "@/lib/serialize-host-data";
+import { sortPolls } from "@/lib/sort-polls";
 import type { Poll, Session } from "@/types";
 
 /** Wait for Firestore before assuming the client cannot reach it */
@@ -67,7 +68,7 @@ export function useHostSession({
     if (!res.ok) throw new Error(data.error ?? "Could not load session.");
     if (data.session) {
       setSession(hostSessionToSession(data.session));
-      setPolls((data.polls ?? []).map(hostPollToPoll));
+      setPolls(sortPolls((data.polls ?? []).map(hostPollToPoll)));
     }
   }, [sessionId]);
 

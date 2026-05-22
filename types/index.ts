@@ -16,6 +16,8 @@ export interface Poll {
   question: string;
   options: string[];
   isActive: boolean;
+  /** Display order in host UI (lower = higher in list). */
+  sortOrder?: number;
   createdAt: Timestamp;
 }
 

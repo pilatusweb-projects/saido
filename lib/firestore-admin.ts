@@ -12,6 +12,7 @@ import {
   normalizePollOptions,
 } from "./poll-options";
 import type { Poll, Response, Session } from "@/types";
+import { sortPolls } from "./sort-polls";
 
 export { isAdminConfigured };
 
@@ -44,6 +45,10 @@ function mapAdminSession(id: string, data: Record<string, unknown>): Session {
 
 function mapAdminPoll(id: string, data: Record<string, unknown>): Poll {
   const createdAt = data.createdAt as Timestamp | undefined;
+  const sortOrder =
+    typeof data.sortOrder === "number"
+      ? data.sortOrder
+      : createdAt?.toMillis?.() ?? undefined;
   return {
     id,
     sessionId: data.sessionId as string,
@@ -51,6 +56,7 @@ function mapAdminPoll(id: string, data: Record<string, unknown>): Poll {
     question: data.question as string,
     options: data.options as string[],
     isActive: Boolean(data.isActive),
+    sortOrder,
     createdAt: createdAt as Poll["createdAt"],
   };
 }
@@ -150,7 +156,7 @@ export async function getSessionHostAdmin(
 
   return {
     session: mapAdminSession(sessionSnap.id, sessionData),
-    polls: pollsSnap.docs.map((d) => mapAdminPoll(d.id, d.data())),
+    polls: sortPolls(pollsSnap.docs.map((d) => mapAdminPoll(d.id, d.data()))),
   };
 }
 
@@ -188,15 +194,53 @@ export async function createPollAdmin(
   if (normalized.length < 2) throw new Error("Add at least 2 options.");
   if (hasDuplicateOptions(normalized)) throw new Error(duplicateOptionsMessage());
 
+  const existing = await getAdminDb()
+    .collection("polls")
+    .where("sessionId", "==", sessionId)
+    .get();
+  let maxOrder = 0;
+  existing.docs.forEach((d) => {
+    const o = d.data().sortOrder;
+    if (typeof o === "number" && o > maxOrder) maxOrder = o;
+  });
+
   const ref = await getAdminDb().collection("polls").add({
     sessionId,
     sessionCode: session.code.toUpperCase(),
     question: question.trim(),
     options: normalized,
     isActive: false,
+    sortOrder: maxOrder + 1000,
     createdAt: FieldValue.serverTimestamp(),
   });
   return ref.id;
+}
+
+export async function reorderPollsAdmin(
+  sessionId: string,
+  ownerUid: string,
+  pollIds: string[]
+): Promise<void> {
+  await assertSessionOwner(sessionId, ownerUid);
+  const snap = await getAdminDb()
+    .collection("polls")
+    .where("sessionId", "==", sessionId)
+    .get();
+
+  if (pollIds.length !== snap.size) {
+    throw new Error("Invalid poll order.");
+  }
+
+  const sessionPollIds = new Set(snap.docs.map((d) => d.id));
+  if (!pollIds.every((id) => sessionPollIds.has(id))) {
+    throw new Error("Invalid poll order.");
+  }
+
+  const batch = getAdminDb().batch();
+  pollIds.forEach((id, index) => {
+    batch.update(getAdminDb().collection("polls").doc(id), { sortOrder: index });
+  });
+  await batch.commit();
 }
 
 export async function launchPollAdmin(
@@ -360,7 +404,7 @@ export async function getPollsForSessionAdmin(sessionId: string): Promise<Poll[]
     .where("sessionId", "==", sessionId)
     .orderBy("createdAt", "desc")
     .get();
-  return snap.docs.map((d) => mapAdminPoll(d.id, d.data()));
+  return sortPolls(snap.docs.map((d) => mapAdminPoll(d.id, d.data())));
 }
 
 export async function getResponsesForPollAdmin(pollId: string): Promise<Response[]> {

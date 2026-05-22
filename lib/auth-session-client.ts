@@ -19,6 +19,16 @@ export async function establishServerSession(): Promise<void> {
   }
 }
 
+export async function hasServerSession(): Promise<boolean> {
+  const res = await fetch("/api/auth/session", {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!res.ok) return false;
+  const data = (await res.json()) as { authenticated?: boolean };
+  return data.authenticated === true;
+}
+
 export async function clearServerSession(): Promise<void> {
   await fetch("/api/auth/session", {
     method: "DELETE",

@@ -16,14 +16,14 @@ export function SessionHostGuard({
   sessionId: string;
   children: ReactNode;
 }) {
-  const { user, loading } = useAuth();
+  const { user, serverSession, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && (!user || !serverSession)) {
       router.replace(`/go/${sessionId}`);
     }
-  }, [user, loading, router, sessionId]);
+  }, [user, serverSession, loading, router, sessionId]);
 
   if (loading) {
     return (
@@ -33,7 +33,7 @@ export function SessionHostGuard({
     );
   }
 
-  if (!user) return null;
+  if (!user || !serverSession) return null;
 
   return <>{children}</>;
 }
