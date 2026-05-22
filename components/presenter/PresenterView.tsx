@@ -187,6 +187,7 @@ export function PresenterView({
                 {displayPoll ? (
                   <LiveBarChart
                     data={chartData}
+                    pollId={displayPoll.id}
                     size="presenter"
                     hideVoteLine
                   />

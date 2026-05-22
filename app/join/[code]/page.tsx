@@ -20,6 +20,8 @@ import type { Session, Poll } from "@/types";
 type JoinSession = Pick<Session, "id" | "code" | "name" | "isActive">;
 
 const TIMEOUT_MS = 8_000;
+const joinedKey = (code: string) => `saido_joined_${code}`;
+const displayNameKey = (code: string) => `saido_display_name_${code}`;
 
 export default function JoinPage({
   params,
@@ -43,6 +45,13 @@ export default function JoinPage({
     setActivePoll(null);
     setVoted(false);
     setNameSet(false);
+    if (typeof window !== "undefined") {
+      const saved = sessionStorage.getItem(displayNameKey(sessionCode));
+      setName(saved ?? "");
+      if (sessionStorage.getItem(joinedKey(sessionCode)) === "1") {
+        setNameSet(true);
+      }
+    }
 
     // Timeout: if Firestore hasn't responded after 8s, show an error.
     const timeout = setTimeout(() => {
@@ -87,6 +96,20 @@ export default function JoinPage({
   }, [activePoll, sessionCode]);
 
   const chartData = usePollResults(activePoll);
+
+  function handleContinue() {
+    const trimmed = name.trim();
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(joinedKey(sessionCode), "1");
+      if (trimmed) {
+        sessionStorage.setItem(displayNameKey(sessionCode), trimmed);
+      } else {
+        sessionStorage.removeItem(displayNameKey(sessionCode));
+      }
+      getParticipantId(sessionCode);
+    }
+    setNameSet(true);
+  }
 
   async function handleVote(answer: string) {
     if (!activePoll || voted || submitting) return;
@@ -162,7 +185,7 @@ export default function JoinPage({
     );
   }
 
-  // --- Name entry (before joining) ---
+  // --- Join step: optional name (Slido-style — Continue works without a name) ---
   if (!nameSet) {
     return (
       <div className="max-w-md mx-auto px-4 py-12">
@@ -181,12 +204,16 @@ export default function JoinPage({
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && setNameSet(true)}
+            onKeyDown={(e) => e.key === "Enter" && handleContinue()}
             placeholder="Anonymous"
-            className="mb-4"
+            className="mb-2"
             autoFocus
           />
-          <Button className="w-full" size="lg" onClick={() => setNameSet(true)}>
+          <p className="text-xs text-slate-400 mb-4">
+            Leave blank to join anonymously. Your name is only used if the host exports
+            results.
+          </p>
+          <Button className="w-full" size="lg" onClick={handleContinue}>
             Continue
           </Button>
         </Card>
@@ -204,8 +231,10 @@ export default function JoinPage({
         <p className="text-xs text-slate-400 mt-0.5">
           Code{" "}
           <span className="font-mono font-bold saido-brand">{sessionCode}</span>
-          {name && (
-            <span className="text-slate-500"> · {name}</span>
+          {name.trim() ? (
+            <span className="text-slate-500"> · {name.trim()}</span>
+          ) : (
+            <span className="text-slate-500"> · Anonymous</span>
           )}
         </p>
       </div>
@@ -249,7 +278,7 @@ export default function JoinPage({
         <Card>
           <CardTitle>Live results</CardTitle>
           <div className="mt-4">
-            <LiveBarChart data={chartData} />
+            <LiveBarChart data={chartData} pollId={activePoll.id} />
           </div>
         </Card>
       )}

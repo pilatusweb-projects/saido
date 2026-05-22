@@ -35,10 +35,17 @@ export function usePollResults(poll: Poll | null): PollChartData {
         }
       });
       const values = labels.map((l) => counts[l] ?? 0);
-      setData({
-        labels,
-        values,
-        totalVotes: responses.length,
+      const totalVotes = responses.length;
+      setData((prev) => {
+        if (
+          prev.labels.length === labels.length &&
+          prev.labels.every((l, i) => l === labels[i]) &&
+          prev.totalVotes === totalVotes &&
+          prev.values.every((v, i) => v === values[i])
+        ) {
+          return prev;
+        }
+        return { labels, values, totalVotes };
       });
     });
 

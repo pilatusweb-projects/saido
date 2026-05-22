@@ -60,7 +60,7 @@ export function PollResultsPanel({
             >
               {truncateLabel(displayPoll.question, 120)}
             </p>
-            <LiveBarChart data={chartData} />
+            <LiveBarChart data={chartData} pollId={displayPoll.id} />
           </>
         ) : (
           <p className="text-sm text-slate-500 py-8 text-center">
